@@ -139,4 +139,13 @@ describe('Security & Validation Auditing', () => {
     expect(savedEvent).toBeDefined();
     expect(savedEvent[1].name).toBe('Persistence Verification Gala');
   });
+
+  it('detects persistence modes correctly according to hosting environment', async () => {
+    const { getPersistenceMode } = await import('@/lib/db-adapter');
+    const mode = getPersistenceMode();
+    expect(mode.mode).toBe('local-file');
+    expect(mode.isDurable).toBe(true);
+    expect(mode.details).toContain('.data/celebr-store.json');
+  });
 });
+
