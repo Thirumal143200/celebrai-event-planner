@@ -13,7 +13,7 @@ import {
 } from '@/lib/store';
 import { calculateReadiness } from '@/lib/readiness';
 import { DemoProvider } from '@/lib/ai-provider';
-import type { EventFormData, TaskItem } from '@/lib/types';
+import type { EventFormData, TaskItem, VendorItem } from '@/lib/types';
 
 describe('End-to-End Workflow & Plan Regeneration Auditing', () => {
   const provider = new DemoProvider();
@@ -91,7 +91,7 @@ describe('End-to-End Workflow & Plan Regeneration Auditing', () => {
     toggleTask(event.id, firstTask.id);
 
     const updatedTasks = getTasks(event.id);
-    expect(updatedTasks.find((t) => t.id === firstTask.id)?.completed).toBe(true);
+    expect(updatedTasks.find((t: TaskItem) => t.id === firstTask.id)?.completed).toBe(true);
   });
 
   it('executes a complete Community Event workflow requiring permits and logistics', async () => {
@@ -111,7 +111,7 @@ describe('End-to-End Workflow & Plan Regeneration Auditing', () => {
     applyPlanNonDestructive(event.id, plan);
 
     const vendors = getVendors(event.id);
-    expect(vendors.some((v) => v.category.toLowerCase().includes('permit') || v.category.toLowerCase().includes('equipment'))).toBe(true);
+    expect(vendors.some((v: VendorItem) => v.category.toLowerCase().includes('permit') || v.category.toLowerCase().includes('equipment'))).toBe(true);
   });
 
   it('preserves user custom edits and completed tasks when regenerating plan without duplication', async () => {
@@ -137,7 +137,7 @@ describe('End-to-End Workflow & Plan Regeneration Auditing', () => {
     // Complete the first task
     const targetTaskId = initialTasks[0].id;
     toggleTask(event.id, targetTaskId);
-    expect(getTasks(event.id).find((t) => t.id === targetTaskId)?.completed).toBe(true);
+    expect(getTasks(event.id).find((t: TaskItem) => t.id === targetTaskId)?.completed).toBe(true);
 
     // Add a custom user task
     const customUserTask: TaskItem = {
@@ -159,16 +159,16 @@ describe('End-to-End Workflow & Plan Regeneration Auditing', () => {
     const regeneratedTasks = getTasks(event.id);
 
     // The user's custom task must still exist and be completed
-    const preservedCustomTask = regeneratedTasks.find((t) => t.id === 'custom-task-special');
+    const preservedCustomTask = regeneratedTasks.find((t: TaskItem) => t.id === 'custom-task-special');
     expect(preservedCustomTask).toBeDefined();
     expect(preservedCustomTask?.completed).toBe(true);
 
     // The completed task from the first plan must still be completed
-    const preservedCompletedTask = regeneratedTasks.find((t) => t.id === targetTaskId);
+    const preservedCompletedTask = regeneratedTasks.find((t: TaskItem) => t.id === targetTaskId);
     expect(preservedCompletedTask?.completed).toBe(true);
 
     // Check for duplicates: no duplicate titles
-    const titles = regeneratedTasks.map((t) => t.title.toLowerCase().trim());
+    const titles = regeneratedTasks.map((t: TaskItem) => t.title.toLowerCase().trim());
     const uniqueTitles = new Set(titles);
     expect(titles.length).toBe(uniqueTitles.size);
   });

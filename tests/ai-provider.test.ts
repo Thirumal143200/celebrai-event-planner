@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DemoProvider, sanitizeForPrompt } from '@/lib/ai-provider';
-import type { EventData } from '@/lib/types';
+import type { EventData, BudgetCategory, TaskItem } from '@/lib/types';
 
 describe('AI Provider & Template Fallback Engine', () => {
   const weddingEvent: EventData = {
@@ -60,20 +60,20 @@ describe('AI Provider & Template Fallback Engine', () => {
     expect(plan.tips.length).toBeGreaterThan(0);
 
     // Sum of budget categories should allocate reasonably
-    const totalAllocated = plan.budgetCategories.reduce((sum, c) => sum + c.allocated, 0);
+    const totalAllocated = plan.budgetCategories.reduce((sum: number, c: BudgetCategory) => sum + c.allocated, 0);
     expect(totalAllocated).toBeGreaterThanOrEqual(90);
     expect(totalAllocated).toBeLessThanOrEqual(105);
   });
 
   it('generates customized plans tailored for birthday events', async () => {
     const plan = await provider.generatePlan(birthdayEvent);
-    expect(plan.budgetCategories.some((c) => c.name.toLowerCase().includes('cake') || c.name.toLowerCase().includes('entertainment'))).toBe(true);
+    expect(plan.budgetCategories.some((c: BudgetCategory) => c.name.toLowerCase().includes('cake') || c.name.toLowerCase().includes('entertainment'))).toBe(true);
     expect(plan.timeline.length).toBeGreaterThan(0);
   });
 
   it('generates customized plans for community events with permits and volunteers', async () => {
     const plan = await provider.generatePlan(communityEvent);
-    expect(plan.tasks.some((t) => t.title.toLowerCase().includes('permit') || t.title.toLowerCase().includes('volunteer'))).toBe(true);
+    expect(plan.tasks.some((t: TaskItem) => t.title.toLowerCase().includes('permit') || t.title.toLowerCase().includes('volunteer'))).toBe(true);
   });
 
   it('handles conversational copilot prompts gracefully', async () => {

@@ -114,7 +114,7 @@ describe('Event Readiness Calculator', () => {
 
     const score = calculateReadiness(baseEvent, undefined, overdueTimeline, [], []);
     expect(score.breakdown.timeline).toBeLessThan(50);
-    expect(score.recommendations.some((r) => r.includes('overdue'))).toBe(true);
+    expect(score.recommendations.some((r: string) => r.includes('overdue'))).toBe(true);
   });
 
   it('identifies over-budget conditions in recommendations', () => {
@@ -134,6 +134,6 @@ describe('Event Readiness Calculator', () => {
     };
 
     const score = calculateReadiness(baseEvent, overBudget, [], [], []);
-    expect(score.recommendations.some((r) => r.includes('exceed your budget'))).toBe(true);
+    expect(score.recommendations.some((r: string) => r.includes('exceed your budget'))).toBe(true);
   });
 });
