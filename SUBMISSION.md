@@ -191,7 +191,7 @@ git push -u origin main
 | **Production Build** | ✅ Verified | **Compiled & static pages generated** (exit code 0) |
 | **Smoke Test** | ✅ Verified | **10/10 contracts verified against live port 3099** |
 | **Repository Size** | ✅ Verified | **~0.92 MB** (Strictly < 10 MB limit) |
-| **Public GitHub URL** | ⏳ *Pending* | Push local repository to `https://github.com/Thirumal143200/celebrai-event-planner` |
+| **Public GitHub URL** | ✅ Verified | [https://github.com/Thirumal143200/celebrai-event-planner](https://github.com/Thirumal143200/celebrai-event-planner) |
 | **Live Deployed URL** | ⏳ *Pending* | Deploy to Vercel/Render using the steps in Phase 5 |
 | **Demo Video URL** | ⏳ *Pending* | Record using the 2.5-minute script in Phase 7 |
 | **LinkedIn Post URL** | ⏳ *Pending* | Publish using the draft in Phase 9 |
