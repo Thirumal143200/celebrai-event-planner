@@ -24,7 +24,7 @@ import type {
 // File-backed persistence configuration
 // ============================================
 
-const DATA_DIR = path.join(process.cwd(), '.data');
+const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '.data');
 const DATA_FILE = path.join(DATA_DIR, 'celebr-store.json');
 
 function loadFromDisk(): Partial<{
