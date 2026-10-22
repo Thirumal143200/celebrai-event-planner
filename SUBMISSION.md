@@ -83,7 +83,7 @@ To ensure the project is immediately deployable to serverless environments witho
 #### Environment Variables Checklist
 Ensure the following variables are configured in your hosting dashboard:
 - `GEMINI_API_KEY`: *(Optional but recommended)* Google AI Studio API key. Server-side only (no `NEXT_PUBLIC_` prefix).
-- `GEMINI_MODEL`: *(Optional, defaults to `gemini-3.8-flash`)*.
+- `GEMINI_MODEL`: *(Optional, defaults to `gemini-3-flash-preview`, with automatic multi-model failover)*.
 - `DATABASE_URL` or `POSTGRES_URL`: *(Optional)* Connection string for Supabase or Neon PostgreSQL when deploying to Vercel/Netlify.
 - `NODE_ENV`: `production`.
 
@@ -158,9 +158,9 @@ git push -u origin main
 
 #### GenAI Services and Usage
 > - **Provider & SDK:** Official `@google/genai` (v2.30.0) SDK.
-> - **Model:** `gemini-3.8-flash` (customizable via `GEMINI_MODEL`).
+> - **Model:** `gemini-3-flash-preview` (customizable via `GEMINI_MODEL`, with resilient failover to `gemini-3.5-flash` / `gemini-3.8-flash`).
 > - **Implementation Architecture:** Server-only execution where API keys never reach the browser client. Input is sanitized to prevent prompt injection and model confusion. All model output is intercepted and validated against strict Zod schemas before persistence.
-> - **Fault-Tolerant Resilience:** Includes a 20-second timeout race, token-bucket rate limiting, and an automatic deterministic template fallback (`DemoProvider`) for offline evaluation.
+> - **Fault-Tolerant Resilience:** Features a 35-second timeout, token-bucket rate limiting, automatic multi-model failover, and a domain knowledge engine fallback for high-demand spikes.
 
 ---
 
@@ -168,7 +168,7 @@ git push -u origin main
 
 > 🚀 Excited to share **CelebrAI** — an AI-powered event planner built for the PromptWars Challenge 5!
 > 
-> Planning weddings, milestone birthdays, and community events shouldn't require messy spreadsheets and endless guesswork. CelebrAI pairs the creative power of Google GenAI (`gemini-3.8-flash`) with deterministic software engineering:
+> Planning weddings, milestone birthdays, and community events shouldn't require messy spreadsheets and endless guesswork. CelebrAI pairs the creative power of Google GenAI with deterministic software engineering:
 > 
 > 🔹 **Deterministic Budgeting:** Mathematical calculations with contingency reserves and over-budget alerts (no LLM arithmetic hallucinations).  
 > 🔹 **Event Readiness Engine:** Explainable 0–100% preparedness scoring across timelines, vendors, tasks, and budgets.  

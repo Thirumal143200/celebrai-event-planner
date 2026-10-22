@@ -21,7 +21,9 @@ export default function AICopilotDrawer({
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [lastFailedText, setLastFailedText] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const suggestedPrompts = [
     `How can I trim 10% from my ${event.type} budget without sacrificing guest experience?`,
@@ -31,12 +33,32 @@ export default function AICopilotDrawer({
     `What questions should I ask when interviewing venue and catering vendors?`,
   ];
 
+  // Auto focus input on drawer open
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => inputRef.current?.focus(), 150);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  // Handle escape key to close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   // Fetch history on open
   useEffect(() => {
     if (isOpen && event.id) {
       fetch(`/api/copilot?eventId=${event.id}`)
         .then((res) => res.json())
         .then((data) => {
+          if (data.isDemo !== undefined) setIsDemoMode(data.isDemo);
           if (data.success && data.data && data.data.length > 0) {
             setMessages(data.data);
           } else {
@@ -75,7 +97,10 @@ export default function AICopilotDrawer({
     const text = (textToSend || input).trim();
     if (!text || loading) return;
 
-    setInput('');
+    if (!textToSend) {
+      setInput('');
+    }
+
     const userMsg: AICopilotMessage = {
       id: generateClientSideId('user'),
       role: 'user',
@@ -101,20 +126,24 @@ export default function AICopilotDrawer({
       if (data.success && data.data) {
         setMessages((prev) => [...prev, data.data]);
         if (data.isDemo !== undefined) setIsDemoMode(data.isDemo);
+        setLastFailedText(null);
         if (onPlanRefresh) onPlanRefresh();
       } else {
+        const errorText = data.message || data.error || 'Sorry, I encountered an issue processing your request. Please try again.';
+        setLastFailedText(text);
         setMessages((prev) => [
           ...prev,
           {
             id: `err-${Date.now()}`,
             role: 'assistant',
-            content: `⚠️ ${data.error || 'Sorry, I encountered an issue processing your request. Please try again.'}`,
+            content: `⚠️ ${errorText}`,
             timestamp: new Date().toISOString(),
-            isAIGenerated: true,
+            isAIGenerated: false,
           },
         ]);
       }
     } catch {
+      setLastFailedText(text);
       setMessages((prev) => [
         ...prev,
         {
@@ -122,7 +151,7 @@ export default function AICopilotDrawer({
           role: 'assistant',
           content: '⚠️ Network connection error. Please verify your connection and try again.',
           timestamp: new Date().toISOString(),
-          isAIGenerated: true,
+          isAIGenerated: false,
         },
       ]);
     } finally {
@@ -153,7 +182,7 @@ export default function AICopilotDrawer({
             <div>
               <h3 className="font-bold text-sm tracking-tight">CelebrAI Planning Copilot</h3>
               <p className="text-[11px] text-white/80">
-                {isDemoMode ? 'Demo Mode (Knowledge Engine)' : 'Powered by Gemini 3.8 Flash'}
+                {isDemoMode ? 'Demo Mode (Knowledge Engine)' : 'Powered by Google Gemini'}
               </p>
             </div>
           </div>
@@ -177,11 +206,24 @@ export default function AICopilotDrawer({
                 className={`max-w-[85%] rounded-2xl p-4 text-xs leading-relaxed shadow-xs relative group ${
                   msg.role === 'user'
                     ? 'bg-[var(--color-primary-600)] text-white rounded-br-xs'
+                    : msg.content.startsWith('⚠️')
+                    ? 'bg-amber-50 border border-amber-200 text-amber-900 rounded-bl-xs'
                     : 'bg-white border border-[var(--color-surface-200)] text-[var(--color-surface-800)] rounded-bl-xs'
                 }`}
               >
                 <div className="whitespace-pre-wrap">{msg.content}</div>
-                {msg.role === 'assistant' && (
+
+                {msg.content.startsWith('⚠️') && lastFailedText && (
+                  <button
+                    onClick={() => handleSendMessage(lastFailedText)}
+                    disabled={loading}
+                    className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-semibold rounded-lg shadow-xs transition-colors"
+                  >
+                    🔄 Retry request
+                  </button>
+                )}
+
+                {msg.role === 'assistant' && !msg.content.startsWith('⚠️') && (
                   <button
                     onClick={() => copyToClipboard(msg.content)}
                     className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded bg-[var(--color-surface-100)] text-[10px] text-[var(--color-surface-600)] hover:text-black transition-opacity"
@@ -217,7 +259,7 @@ export default function AICopilotDrawer({
                 key={idx}
                 disabled={loading}
                 onClick={() => handleSendMessage(p)}
-                className="text-[11px] whitespace-nowrap bg-[var(--color-surface-100)] hover:bg-[var(--color-primary-50)] hover:text-[var(--color-primary-700)] text-[var(--color-surface-700)] px-3 py-1.5 rounded-full border border-[var(--color-surface-200)] transition-colors flex-shrink-0"
+                className="text-[11px] whitespace-nowrap bg-[var(--color-surface-100)] hover:bg-[var(--color-primary-50)] hover:text-[var(--color-primary-700)] text-[var(--color-surface-700)] px-3 py-1.5 rounded-full border border-[var(--color-surface-200)] transition-colors flex-shrink-0 cursor-pointer disabled:opacity-50"
               >
                 {p}
               </button>
@@ -235,6 +277,7 @@ export default function AICopilotDrawer({
             className="flex items-center gap-2"
           >
             <input
+              ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -246,7 +289,7 @@ export default function AICopilotDrawer({
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              className="btn btn-primary btn-sm px-4"
+              className="btn btn-primary btn-sm px-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               id="copilot-send-btn"
             >
               {loading ? '...' : 'Send'}

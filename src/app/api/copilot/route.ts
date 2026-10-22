@@ -30,9 +30,16 @@ export async function GET(
       );
     }
     const history = getCopilotHistory(eventId);
-    return NextResponse.json({ success: true, data: history });
+    const provider = getAIProvider();
+    return NextResponse.json({
+      success: true,
+      data: history,
+      isDemo: isAIDemoMode(),
+      providerName: provider.name,
+      configuredModel: process.env.GEMINI_MODEL || 'gemini-3-flash-preview',
+    } as any);
   } catch (error) {
-    console.error('Copilot GET error:', error);
+    console.error('[CelebrAI Copilot GET] error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to retrieve copilot history' },
       { status: 500 }
@@ -85,6 +92,7 @@ export async function POST(
     }));
 
     const response = await provider.chat(event, message, history);
+    const meta = (provider as any).lastCallMetadata || { isFallback: false };
 
     // Store assistant message
     const assistantMsg: AICopilotMessage = {
@@ -92,7 +100,7 @@ export async function POST(
       role: 'assistant',
       content: response,
       timestamp: new Date().toISOString(),
-      isAIGenerated: true,
+      isAIGenerated: !meta.isFallback,
     };
     addCopilotMessage(eventId, assistantMsg);
 
@@ -100,15 +108,26 @@ export async function POST(
       success: true,
       data: assistantMsg,
       isDemo: isAIDemoMode(),
-    });
+      isFallback: meta.isFallback || false,
+      modelUsed: meta.modelUsed || (process.env.GEMINI_MODEL || 'gemini-3-flash-preview'),
+      fallbackNotice: meta.notice,
+    } as any);
   } catch (error) {
-    console.error('Copilot error:', error);
-    const rawMessage = error instanceof Error ? error.message : '';
-    const safeMessage = rawMessage.includes('Rate limit')
-      ? rawMessage
-      : 'Copilot encountered an error. Please try again.';
+    const rawError = error instanceof Error ? error.message : String(error);
+    const safeError = rawError.replace(/key=[^&\s]+/gi, 'key=[REDACTED]');
+    console.error('[CelebrAI Copilot POST] Safe error trace:', safeError);
+
+    let safeMessage = 'Copilot encountered an error. Please try again.';
+    if (rawError.includes('Rate limit')) {
+      safeMessage = 'Rate limit reached. Please wait a few seconds before asking another question.';
+    } else if (rawError.includes('503') || rawError.includes('high demand') || rawError.includes('UNAVAILABLE')) {
+      safeMessage = 'Google Gemini is currently experiencing high demand. Please try again in a few moments.';
+    } else if (rawError.includes('timed out')) {
+      safeMessage = 'The request took longer than expected. Please try again with a shorter prompt.';
+    }
+
     return NextResponse.json(
-      { success: false, error: 'Copilot failed', message: safeMessage },
+      { success: false, error: safeMessage, message: safeMessage },
       { status: 500 }
     );
   }

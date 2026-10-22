@@ -61,7 +61,7 @@ function schedulePersist(): void {
 export function saveToDisk(): void {
   try {
     const store = getStore();
-    if (!fs.existsSync(DATA_DIR)) {
+    if (!fs.existsSync(/*turbopackIgnore: true*/ DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     const data = {

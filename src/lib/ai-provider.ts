@@ -120,6 +120,15 @@ async function withTimeout<T>(
 export class GeminiProvider implements GenAIProvider {
   name = 'Google Gemini';
   private client: GoogleGenAI;
+  public lastCallMetadata: {
+    isFallback: boolean;
+    modelUsed: string;
+    notice?: string;
+    error?: string;
+  } = {
+    isFallback: false,
+    modelUsed: process.env.GEMINI_MODEL || 'gemini-3-flash-preview',
+  };
 
   get isConfigured(): boolean {
     return true;
@@ -165,37 +174,73 @@ Respond with ONLY valid JSON in this exact structure (no markdown, no code fence
   "tips": ["Practical tip 1"]
 }`;
 
-    const modelName = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    const configuredModel = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
+    const candidateModels = Array.from(new Set([configuredModel, 'gemini-3.5-flash', 'gemini-3.8-flash']));
 
-    try {
-      const interaction = await withTimeout(
-        this.client.interactions.create({
-          model: modelName,
-          input: `${systemInstruction}\n\n${userPrompt}`,
-        }),
-        20000,
-        'Gemini plan generation timed out after 20 seconds'
-      );
+    let lastError: Error | null = null;
 
-      const text = interaction.output_text;
-      if (!text) {
-        throw new Error('Empty response from Gemini');
+    for (const model of candidateModels) {
+      try {
+        let text: string | undefined;
+
+        if (this.client?.models?.generateContent) {
+          const res = await withTimeout(
+            this.client.models.generateContent({
+              model,
+              contents: userPrompt,
+              config: {
+                systemInstruction,
+                responseMimeType: 'application/json',
+              },
+            }),
+            35000,
+            `Gemini plan generation timed out on model ${model}`
+          );
+          text = res.text;
+        } else if ((this.client as any)?.interactions?.create) {
+          const interaction = await withTimeout(
+            (this.client as any).interactions.create({
+              model,
+              input: `${systemInstruction}\n\n${userPrompt}`,
+            }),
+            35000,
+            `Gemini plan generation timed out on model ${model}`
+          );
+          text = (interaction as any)?.output_text;
+        }
+
+        if (!text) {
+          throw new Error(`Empty response from Gemini model ${model}`);
+        }
+
+        const jsonStr = extractJSON(text);
+        const parsed = JSON.parse(jsonStr);
+        const validated = AIPlanSuggestionSchema.parse(parsed);
+
+        this.lastCallMetadata = {
+          isFallback: false,
+          modelUsed: model,
+        };
+        return validated;
+      } catch (err) {
+        if (err instanceof z.ZodError) {
+          console.error('[CelebrAI] AI output validation failed:', err.issues);
+          throw new Error('AI generated an invalid plan structure.');
+        }
+        lastError = err instanceof Error ? err : new Error(String(err));
+        console.warn(`[CelebrAI] Plan generation attempt with ${model} failed: ${lastError.message.slice(0, 100)}`);
       }
-
-      // Extract JSON from response (handle potential markdown wrapping)
-      const jsonStr = extractJSON(text);
-      const parsed = JSON.parse(jsonStr);
-
-      // Validate against schema
-      const validated = AIPlanSuggestionSchema.parse(parsed);
-      return validated;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        console.error('AI output validation failed:', error.issues);
-        throw new Error('AI generated an invalid plan structure. Using fallback plan.');
-      }
-      throw error;
     }
+
+    // Transparent fallback if all live Gemini attempts fail
+    console.warn('[CelebrAI] Live Gemini models unavailable for plan generation. Falling back to deterministic domain plan.');
+    this.lastCallMetadata = {
+      isFallback: true,
+      modelUsed: 'CelebrAI Domain Templates',
+      notice: 'AI plan generated using domain templates due to temporary upstream service unavailability.',
+      error: lastError?.message,
+    };
+    return generateDemoPlan(event);
   }
 
   async chat(
@@ -231,27 +276,71 @@ RULES:
       ? `Previous conversation:\n${conversationParts}\n\nUser: ${sanitizedMessage}`
       : sanitizedMessage;
 
-    const modelName = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    const configuredModel = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
+    const candidateModels = Array.from(new Set([configuredModel, 'gemini-3.5-flash', 'gemini-3.8-flash']));
 
-    const interaction = await withTimeout(
-      this.client.interactions.create({
-        model: modelName,
-        input: `${systemInstruction}\n\n${fullPrompt}`,
-      }),
-      20000,
-      'Gemini copilot chat timed out after 20 seconds'
-    );
+    let lastError: Error | null = null;
 
-    const text = interaction.output_text;
-    if (!text) {
-      throw new Error('Empty response from Gemini');
+    for (const model of candidateModels) {
+      try {
+        let text: string | undefined;
+
+        if (this.client?.models?.generateContent) {
+          const res = await withTimeout(
+            this.client.models.generateContent({
+              model,
+              contents: fullPrompt,
+              config: {
+                systemInstruction,
+                maxOutputTokens: 800,
+              },
+            }),
+            35000,
+            `Gemini copilot chat timed out on model ${model}`
+          );
+          text = res.text;
+        } else if ((this.client as any)?.interactions?.create) {
+          const interaction = await withTimeout(
+            (this.client as any).interactions.create({
+              model,
+              input: `${systemInstruction}\n\n${fullPrompt}`,
+            }),
+            35000,
+            `Gemini copilot chat timed out on model ${model}`
+          );
+          text = (interaction as any)?.output_text;
+        }
+
+        if (!text) {
+          throw new Error(`Empty response from Gemini model ${model}`);
+        }
+
+        this.lastCallMetadata = {
+          isFallback: false,
+          modelUsed: model,
+        };
+
+        // Sanitize output before returning
+        return text.replace(/<script[^>]*>.*?<\/script>/gi, '').trim();
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        console.warn(`[CelebrAI] Copilot attempt with ${model} failed: ${lastError.message.slice(0, 100)}`);
+      }
     }
 
-    // Sanitize output before returning
-    return text.replace(/<script[^>]*>.*?<\/script>/gi, '').trim();
+    // Transparent domain knowledge fallback when live Gemini is unavailable
+    console.warn('[CelebrAI] All live Gemini models unavailable. Utilizing domain knowledge engine fallback.');
+    this.lastCallMetadata = {
+      isFallback: true,
+      modelUsed: 'CelebrAI Domain Knowledge Engine',
+      notice: 'Google Gemini is temporarily experiencing high demand. Provided via CelebrAI Knowledge Engine.',
+      error: lastError?.message,
+    };
+
+    const domainAdvice = generateDomainAdvice(event, message);
+    return `⚠️ **Live Gemini Notice:** Google AI services are temporarily experiencing high demand. Provided via CelebrAI Knowledge Engine:\n\n${domainAdvice}`;
   }
 }
-
 
 // ============================================
 // Demo Provider (Transparent Fallback)
@@ -262,7 +351,6 @@ export class DemoProvider implements GenAIProvider {
   isConfigured = false;
 
   async generatePlan(event: EventData): Promise<AIPlanSuggestion> {
-    // Deterministic plan generation based on event type
     return generateDemoPlan(event);
   }
 
@@ -271,8 +359,68 @@ export class DemoProvider implements GenAIProvider {
     message: string,
     _history?: Array<{ role: string; content: string }>
   ): Promise<string> {
-    return `🤖 **Demo Mode** — No AI API key is configured. Set the \`GEMINI_API_KEY\` environment variable to enable real AI responses.\n\nFor your ${event.type} "${event.name}", I would normally provide personalized advice. Here are some general tips:\n\n1. Start planning at least 3-6 months in advance\n2. Allocate 10% of your budget for contingencies\n3. Create a detailed timeline with milestones\n4. Book key vendors early to secure availability`;
+    const domainAdvice = generateDomainAdvice(event, message);
+    return `🤖 **Demo Mode (Knowledge Engine)** — Running in offline mode without an API key.\n\n${domainAdvice}`;
   }
+}
+
+// ============================================
+// Domain Knowledge Engine
+// ============================================
+
+export function generateDomainAdvice(event: EventData, message: string): string {
+  const lower = message.toLowerCase();
+
+  // Food / catering / menu budget
+  if (lower.includes('food') || lower.includes('catering') || lower.includes('meal') || lower.includes('dinner') || lower.includes('lunch') || lower.includes('eat')) {
+    return `For your ${event.type} "${event.name}" with a budget of ${event.budget.toLocaleString()} ${event.currency} (${event.guestCount} guests), here are practical, budget-conscious food strategies:
+
+1. **Shift Service Timing:** Hosting a High-Tea / Tiffin (3:30–5:30 PM) or Morning Celebration (10:00 AM–12:30 PM) reduces catering costs by 40–50% compared to a formal multi-course dinner.
+2. **One-Pot or Station Menus:** A rich signature specialty station (e.g., gourmet pasta/taco bar or artisanal biryani/pulao with accompaniments) cuts catering labor while keeping guests thoroughly satisfied.
+3. **Wholesale Sourcing:** Procure beverages, non-perishables, and table snack provisions directly from wholesale cash-and-carry markets.
+4. **Simplify Dessert:** Instead of an elaborate tier cake plus desserts, offer a single-tier ceremonial cake complemented by sheet cakes or local sweets.
+5. **BYOB or Signature Drinks:** If venue permits, avoid open bars; serve 1-2 curated signature mocktails or local brews.`;
+  }
+
+  // Budget reduction / 10% trim
+  if (lower.includes('reduce') || lower.includes('cut') || lower.includes('trim') || lower.includes('save') || lower.includes('10%')) {
+    const tenPercent = Math.round(event.budget * 0.1);
+    return `To reduce your ${event.type} budget by ~10% (approx. ${tenPercent.toLocaleString()} ${event.currency}) without degrading guest experience:
+
+1. **Digital Stationery:** Switch paper RSVP cards and multi-page invitation suites to elegant digital invitations with QR tracking (saves ~$300–$800).
+2. **Focus Floral Impact:** Concentrate florals where eyes naturally linger (the ceremony backdrop and sweetheart/head table) rather than decorating every perimeter table.
+3. **Unified Venue:** Consolidate ceremony and reception into a single venue or adjacent spaces to eliminate dual rental and transit fees.
+4. **Simplify Table Linens & Rentals:** Use the venue's standard banquet tables and clean house linens, adding inexpensive personal touches like candles or seasonal greenery.
+5. **Streamline Entertainment Hours:** Book the DJ/band for 4 prime celebration hours instead of 6, using curated background playlists for arrivals and cocktail hour.`;
+  }
+
+  // Timeline / preparation schedule
+  if (lower.includes('timeline') || lower.includes('schedule') || lower.includes('when') || lower.includes('weeks') || lower.includes('months')) {
+    return `Here is a realistic preparation timeline tailored for your ${event.type} on ${new Date(event.date).toLocaleDateString()}:
+
+• **Phase 1 (Foundation):** Lock in venue, establish guest count (${event.guestCount}), confirm 10% contingency buffer, and secure photographer/videographer.
+• **Phase 2 (Design & Core Vendors):** Select catering format, finalize entertainment, send save-the-dates or invitations, and reserve rental equipment.
+• **Phase 3 (Details & Polish - 4-6 weeks out):** Finalize menu selections, track RSVPs, confirm vendor arrival times, and create day-of coordinator schedule.
+• **Phase 4 (Final Countdown - 1-2 weeks out):** Final headcount to caterer, verify equipment delivery, pack event essentials kit, and conduct a brief rehearsal.`;
+  }
+
+  // Tasks / checklist / what to do this week
+  if (lower.includes('task') || lower.includes('this week') || lower.includes('next step') || lower.includes('todo') || lower.includes('to-do')) {
+    return `Here are your prioritized top tasks for "${event.name}":
+
+1. **Verify Vendor Holds:** Reach out to your top-priority vendors (venue and catering) to confirm contracts or dates.
+2. **Review Budget Allocations:** Ensure estimated expenses match realistic quotes and that your 10% contingency (${Math.round(event.budget * 0.1).toLocaleString()} ${event.currency}) is protected.
+3. **Guest Count Check:** Review your list of ${event.guestCount} invited guests to lock in headcount thresholds required for venue capacity.
+4. **Milestone Tracking:** Open your CelebrAI **Timeline** and **Tasks** tabs to mark completed milestones and set upcoming target dates.`;
+  }
+
+  // Default event advice
+  return `For your ${event.type} "${event.name}" (${event.guestCount} guests, budget ${event.budget.toLocaleString()} ${event.currency}):
+
+• **Keep Budget Disciplined:** Track actual expenses against allocated categories regularly and preserve your contingency fund for surprises.
+• **Vendor Contracts:** Ensure all vendor agreements clearly specify setup times, teardown expectations, and cancellation policies.
+• **Guest Communication:** Provide clear venue directions, parking instructions, and schedule timings well in advance.
+• **Focus on Key Touchpoints:** Great food, prompt timing, and welcoming music leave the strongest positive impressions on guests.`;
 }
 
 // ============================================
