@@ -165,7 +165,7 @@ Respond with ONLY valid JSON in this exact structure (no markdown, no code fence
   "tips": ["Practical tip 1"]
 }`;
 
-    const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const modelName = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
     try {
       const interaction = await withTimeout(
@@ -231,7 +231,7 @@ RULES:
       ? `Previous conversation:\n${conversationParts}\n\nUser: ${sanitizedMessage}`
       : sanitizedMessage;
 
-    const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const modelName = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
     const interaction = await withTimeout(
       this.client.interactions.create({

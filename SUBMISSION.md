@@ -83,7 +83,7 @@ To ensure the project is immediately deployable to serverless environments witho
 #### Environment Variables Checklist
 Ensure the following variables are configured in your hosting dashboard:
 - `GEMINI_API_KEY`: *(Optional but recommended)* Google AI Studio API key. Server-side only (no `NEXT_PUBLIC_` prefix).
-- `GEMINI_MODEL`: *(Optional, defaults to `gemini-2.5-flash`)*.
+- `GEMINI_MODEL`: *(Optional, defaults to `gemini-3.8-flash`)*.
 - `DATABASE_URL` or `POSTGRES_URL`: *(Optional)* Connection string for Supabase or Neon PostgreSQL when deploying to Vercel/Netlify.
 - `NODE_ENV`: `production`.
 
@@ -135,7 +135,7 @@ git push -u origin main
 
 - **[0:55 – 1:30] Non-Destructive AI Plan Generation**
   - *Visual:* Click "Generate AI Plan". Watch the animated progress bar as timeline milestones, vendor requirements, and tasks populate.
-  - *Speaker:* "With one click, CelebrAI invokes the Google GenAI provider. When `GEMINI_API_KEY` is present, it consults `gemini-2.5-flash`; offline, it seamlessly falls back to domain-crafted templates. More importantly, plan generation is non-destructive: if you have custom tasks or completed milestones, regenerating the plan merges new suggestions without erasing your progress or duplicating tasks."
+  - *Speaker:* "With one click, CelebrAI invokes the Google GenAI provider. When `GEMINI_API_KEY` is present, it consults `gemini-3.8-flash`; offline, it seamlessly falls back to domain-crafted templates. More importantly, plan generation is non-destructive: if you have custom tasks or completed milestones, regenerating the plan merges new suggestions without erasing your progress or duplicating tasks."
 
 - **[1:30 – 2:05] Deterministic Budget & Event Readiness Engine**
   - *Visual:* Navigate to "Budget" tab. Adjust category allocations, enter an actual expense, and observe the live balance and contingency updates. Then view the "Readiness Score" card.
@@ -158,7 +158,7 @@ git push -u origin main
 
 #### GenAI Services and Usage
 > - **Provider & SDK:** Official `@google/genai` (v2.30.0) SDK.
-> - **Model:** `gemini-2.5-flash` (customizable via `GEMINI_MODEL`).
+> - **Model:** `gemini-3.8-flash` (customizable via `GEMINI_MODEL`).
 > - **Implementation Architecture:** Server-only execution where API keys never reach the browser client. Input is sanitized to prevent prompt injection and model confusion. All model output is intercepted and validated against strict Zod schemas before persistence.
 > - **Fault-Tolerant Resilience:** Includes a 20-second timeout race, token-bucket rate limiting, and an automatic deterministic template fallback (`DemoProvider`) for offline evaluation.
 
@@ -168,7 +168,7 @@ git push -u origin main
 
 > 🚀 Excited to share **CelebrAI** — an AI-powered event planner built for the PromptWars Challenge 5!
 > 
-> Planning weddings, milestone birthdays, and community events shouldn't require messy spreadsheets and endless guesswork. CelebrAI pairs the creative power of Google GenAI (`gemini-2.5-flash`) with deterministic software engineering:
+> Planning weddings, milestone birthdays, and community events shouldn't require messy spreadsheets and endless guesswork. CelebrAI pairs the creative power of Google GenAI (`gemini-3.8-flash`) with deterministic software engineering:
 > 
 > 🔹 **Deterministic Budgeting:** Mathematical calculations with contingency reserves and over-budget alerts (no LLM arithmetic hallucinations).  
 > 🔹 **Event Readiness Engine:** Explainable 0–100% preparedness scoring across timelines, vendors, tasks, and budgets.  
