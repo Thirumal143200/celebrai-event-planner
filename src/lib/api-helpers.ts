@@ -24,41 +24,58 @@ export function apiSuccess<T>(
   );
 }
 
-export function apiError(
+export function apiError<T = never>(
   error: string,
   status: number = 400,
-  message?: string
-): NextResponse<ApiResponse<never>> {
+  message?: string,
+  code?: string
+): NextResponse<ApiResponse<T>> {
   return NextResponse.json(
     {
       success: false,
       error,
       ...(message ? { message } : {}),
+      ...(code ? { code } : {}),
     },
     { status }
   );
 }
 
-export function validateIdParam(id: string): { valid: true; id: string } | { valid: false; response: NextResponse<ApiResponse<never>> } {
+export function validateIdParam<T = never>(
+  id: string
+): { valid: true; id: string } | { valid: false; response: NextResponse<ApiResponse<T>> } {
   const result = IdParamSchema.safeParse({ id });
   if (!result.success) {
     return {
       valid: false,
-      response: apiError('Invalid event ID format', 400, 'Event ID must be a valid RFC4122 UUID'),
+      response: apiError<T>(
+        'Invalid event ID format',
+        400,
+        'Event ID must be a valid RFC4122 UUID',
+        'INVALID_ID_FORMAT'
+      ),
     };
   }
   return { valid: true, id };
 }
 
-export async function parseRequestBody<T = any>(
+export async function parseRequestBody<T = unknown, R = never>(
   request: NextRequest
-): Promise<{ success: true; data: T } | { success: false; response: NextResponse<ApiResponse<never>> }> {
+): Promise<
+  | { success: true; data: T }
+  | { success: false; response: NextResponse<ApiResponse<R>> }
+> {
   try {
     const contentLength = request.headers.get('content-length');
     if (contentLength && parseInt(contentLength, 10) > MAX_PAYLOAD_SIZE) {
       return {
         success: false,
-        response: apiError('Payload too large', 413, 'Maximum payload size is 1MB'),
+        response: apiError<R>(
+          'Payload too large',
+          413,
+          'Maximum payload size is 1MB',
+          'PAYLOAD_TOO_LARGE'
+        ),
       };
     }
 
@@ -67,16 +84,24 @@ export async function parseRequestBody<T = any>(
   } catch {
     return {
       success: false,
-      response: apiError('Malformed request', 400, 'Request body must be valid JSON'),
+      response: apiError<R>(
+        'Malformed request',
+        400,
+        'Request body must be valid JSON',
+        'MALFORMED_JSON'
+      ),
     };
   }
 }
 
-export async function parseAndValidateBody<T>(
+export async function parseAndValidateBody<T, R = never>(
   request: NextRequest,
   schema: z.ZodType<T>
-): Promise<{ success: true; data: T } | { success: false; response: NextResponse<ApiResponse<never>> }> {
-  const parsed = await parseRequestBody<unknown>(request);
+): Promise<
+  | { success: true; data: T }
+  | { success: false; response: NextResponse<ApiResponse<R>> }
+> {
+  const parsed = await parseRequestBody<unknown, R>(request);
   if (!parsed.success) {
     return parsed;
   }
@@ -88,7 +113,12 @@ export async function parseAndValidateBody<T>(
       .join('; ');
     return {
       success: false,
-      response: apiError('Validation failed', 400, formattedError),
+      response: apiError<R>(
+        'Validation failed',
+        400,
+        formattedError,
+        'VALIDATION_FAILED'
+      ),
     };
   }
 

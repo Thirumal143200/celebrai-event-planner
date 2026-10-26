@@ -161,6 +161,7 @@ export interface ApiResponse<T> {
   error?: string;
   message?: string;
   isDemo?: boolean;
+  code?: string;
 }
 
 export interface PaginatedResponse<T> extends ApiResponse<T[]> {

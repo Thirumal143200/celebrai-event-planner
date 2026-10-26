@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import type { BudgetBreakdown, BudgetCategory, Currency } from '@/lib/types';
-import { generateClientSideId } from '@/lib/utils';
+import { generateClientSideId, getCurrencySymbol } from '@/lib/utils';
 
 interface BudgetTabProps {
   eventId: string;
@@ -24,13 +24,7 @@ export default function BudgetTab({ eventId, budget, currency, onUpdate }: Budge
   const [catActual, setCatActual] = useState<number>(0);
   const [catNotes, setCatNotes] = useState('');
 
-  const currencySymbols: Record<Currency, string> = {
-    USD: '$',
-    EUR: '€',
-    GBP: '£',
-    INR: '₹',
-  };
-  const sym = currencySymbols[currency] || '$';
+  const sym = getCurrencySymbol(currency);
 
   if (!budget) {
     return (

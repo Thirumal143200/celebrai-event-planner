@@ -9,7 +9,7 @@ import type {
   TaskItem,
   Currency,
 } from '@/lib/types';
-import { getDaysUntil } from '@/lib/utils';
+import { getDaysUntil, getCurrencySymbol } from '@/lib/utils';
 
 interface OverviewTabProps {
   event: EventData;
@@ -34,13 +34,7 @@ export default function OverviewTab({
   onGeneratePlan,
   planLoading,
 }: OverviewTabProps) {
-  const currencySymbols: Record<Currency, string> = {
-    USD: '$',
-    EUR: '€',
-    GBP: '£',
-    INR: '₹',
-  };
-  const sym = currencySymbols[currency] || '$';
+  const sym = getCurrencySymbol(currency);
 
   const daysUntil = getDaysUntil(event.date);
 

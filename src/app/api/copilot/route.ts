@@ -51,9 +51,12 @@ export async function POST(
   request: NextRequest
 ): Promise<NextResponse<ApiResponse<AICopilotMessage> & CopilotMetadataResponse>> {
   try {
-    const validation = await parseAndValidateBody(request, CopilotMessageSchema);
+    const validation = await parseAndValidateBody<
+      import('zod').infer<typeof CopilotMessageSchema>,
+      AICopilotMessage
+    >(request, CopilotMessageSchema);
     if (!validation.success) {
-      return validation.response as NextResponse<ApiResponse<AICopilotMessage>>;
+      return validation.response;
     }
 
     const { message, eventId } = validation.data;

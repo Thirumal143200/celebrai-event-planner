@@ -78,12 +78,12 @@ export default function EventWorkspacePage({ params }: PageProps) {
 
   useEffect(() => {
     let ignore = false;
-    async function load() {
-      try {
-        const res = await fetch(`/api/events/${id}?aggregate=true`);
-        const data = await res.json();
-        if (ignore) return;
+    const controller = new AbortController();
 
+    fetch(`/api/events/${id}?aggregate=true`, { signal: controller.signal })
+      .then((res) => res.json())
+      .then((data) => {
+        if (ignore) return;
         if (data.success && data.data) {
           const agg = data.data as EventAggregateData;
           setEvent(agg.event);
@@ -94,21 +94,22 @@ export default function EventWorkspacePage({ params }: PageProps) {
           setReadiness(agg.readiness);
         } else {
           router.push('/');
-          return;
         }
-      } catch {
-        if (!ignore) {
+      })
+      .catch((err: unknown) => {
+        if (!ignore && !(err instanceof DOMException && err.name === 'AbortError')) {
           setAlert({ type: 'error', text: 'Failed to load event data. Please refresh.' });
         }
-      } finally {
+      })
+      .finally(() => {
         if (!ignore) {
           setLoading(false);
         }
-      }
-    }
-    load();
+      });
+
     return () => {
       ignore = true;
+      controller.abort();
     };
   }, [id, router]);
 

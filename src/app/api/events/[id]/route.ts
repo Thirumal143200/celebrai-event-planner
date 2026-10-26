@@ -3,25 +3,12 @@
  * Supports single-call ?aggregate=true for ultra-low latency workspace hydration.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { EventFormSchema, EventStatusSchema } from '@/lib/validation';
+import { EventFormSchema, EventStatusSchema, EventUpdateInput } from '@/lib/validation';
 import { getEvent, getEventAggregate, updateEvent, deleteEvent, updateEventStatus } from '@/lib/store';
 import { parseRequestBody, apiSuccess, apiError, validateIdParam } from '@/lib/api-helpers';
 import type { ApiResponse, EventData, EventAggregateData } from '@/lib/types';
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-interface EventUpdateBody {
-  status?: string;
-  name?: string;
-  type?: 'wedding' | 'birthday' | 'community';
-  date?: string;
-  guestCount?: number;
-  budget?: number;
-  currency?: 'USD' | 'EUR' | 'GBP' | 'INR';
-  location?: string;
-  description?: string;
-  [key: string]: unknown;
-}
 
 export async function GET(
   request: NextRequest,
@@ -29,7 +16,7 @@ export async function GET(
 ): Promise<NextResponse<ApiResponse<EventData | EventAggregateData>>> {
   try {
     const { id } = await context.params;
-    const validation = validateIdParam(id);
+    const validation = validateIdParam<EventData | EventAggregateData>(id);
     if (!validation.valid) {
       return validation.response;
     }
@@ -38,20 +25,20 @@ export async function GET(
     if (searchParams.get('aggregate') === 'true') {
       const aggregate = getEventAggregate(id);
       if (!aggregate) {
-        return apiError('Event not found', 404);
+        return apiError<EventData | EventAggregateData>('Event not found', 404);
       }
       return apiSuccess(aggregate);
     }
 
     const event = getEvent(id);
     if (!event) {
-      return apiError('Event not found', 404);
+      return apiError<EventData | EventAggregateData>('Event not found', 404);
     }
 
     return apiSuccess(event);
   } catch (error) {
     console.error('Error fetching event:', error);
-    return apiError('Failed to fetch event', 500);
+    return apiError<EventData | EventAggregateData>('Failed to fetch event', 500);
   }
 }
 
@@ -61,14 +48,14 @@ export async function PUT(
 ): Promise<NextResponse<ApiResponse<EventData>>> {
   try {
     const { id } = await context.params;
-    const validation = validateIdParam(id);
+    const validation = validateIdParam<EventData>(id);
     if (!validation.valid) {
       return validation.response;
     }
 
-    const parseResult = await parseRequestBody<EventUpdateBody>(request);
+    const parseResult = await parseRequestBody<EventUpdateInput, EventData>(request);
     if (!parseResult.success) {
-      return parseResult.response as NextResponse<ApiResponse<EventData>>;
+      return parseResult.response;
     }
     const body = parseResult.data;
 
@@ -76,11 +63,11 @@ export async function PUT(
     if (body.status && Object.keys(body).length === 1) {
       const statusValidation = EventStatusSchema.safeParse(body.status);
       if (!statusValidation.success) {
-        return apiError('Invalid event status', 400);
+        return apiError<EventData>('Invalid event status', 400);
       }
       const updated = updateEventStatus(id, statusValidation.data);
       if (!updated) {
-        return apiError('Event not found', 404);
+        return apiError<EventData>('Event not found', 404);
       }
       return apiSuccess(updated);
     }
@@ -89,18 +76,18 @@ export async function PUT(
     const result = EventFormSchema.partial().safeParse(body);
     if (!result.success) {
       const errorMsg = result.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ');
-      return apiError('Validation failed', 400, errorMsg);
+      return apiError<EventData>('Validation failed', 400, errorMsg);
     }
 
     const updated = updateEvent(id, result.data);
     if (!updated) {
-      return apiError('Event not found', 404);
+      return apiError<EventData>('Event not found', 404);
     }
 
     return apiSuccess(updated);
   } catch (error) {
     console.error('Error updating event:', error);
-    return apiError('Failed to update event', 500);
+    return apiError<EventData>('Failed to update event', 500);
   }
 }
 
@@ -110,19 +97,19 @@ export async function DELETE(
 ): Promise<NextResponse<ApiResponse<null>>> {
   try {
     const { id } = await context.params;
-    const validation = validateIdParam(id);
+    const validation = validateIdParam<null>(id);
     if (!validation.valid) {
       return validation.response;
     }
 
     const deleted = deleteEvent(id);
     if (!deleted) {
-      return apiError('Event not found', 404);
+      return apiError<null>('Event not found', 404);
     }
 
     return apiSuccess(null, 200, { message: 'Event deleted' });
   } catch (error) {
     console.error('Error deleting event:', error);
-    return apiError('Failed to delete event', 500);
+    return apiError<null>('Failed to delete event', 500);
   }
 }

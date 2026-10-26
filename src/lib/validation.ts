@@ -164,3 +164,83 @@ export const CopilotMessageSchema = z.object({
 export const IdParamSchema = z.object({
   id: z.string().uuid('Invalid event ID'),
 });
+
+// ============================================
+// API Mutation Schemas & Contracts
+// ============================================
+
+export const EventUpdateSchema = EventFormSchema.partial().extend({
+  status: EventStatusSchema.optional(),
+});
+export type EventUpdateInput = z.infer<typeof EventUpdateSchema>;
+
+export const BudgetContingencyUpdateSchema = z.object({
+  contingencyPercent: z.number().min(0).max(50),
+});
+
+export const BudgetCategoryUpdateSchema = z.object({
+  categoryId: z.string().min(1),
+  updates: BudgetCategorySchema.partial(),
+});
+
+export const BudgetBulkUpdateSchema = z.object({
+  categories: z.array(BudgetCategorySchema).max(50),
+});
+
+export const BudgetPutSchema = z.union([
+  BudgetContingencyUpdateSchema,
+  BudgetCategoryUpdateSchema,
+  BudgetBulkUpdateSchema,
+]);
+export type BudgetPutInput = z.infer<typeof BudgetPutSchema>;
+
+export const TimelineItemUpdateSchema = z.object({
+  itemId: z.string().min(1),
+  updates: TimelineItemSchema.partial(),
+});
+
+export const TimelineBulkUpdateSchema = z.object({
+  items: z.array(TimelineItemSchema).max(100),
+});
+
+export const TimelinePutSchema = z.union([
+  TimelineItemUpdateSchema,
+  TimelineBulkUpdateSchema,
+]);
+export type TimelinePutInput = z.infer<typeof TimelinePutSchema>;
+
+export const VendorItemUpdateSchema = z.object({
+  vendorId: z.string().min(1),
+  updates: VendorItemSchema.partial(),
+});
+
+export const VendorBulkUpdateSchema = z.object({
+  items: z.array(VendorItemSchema).max(50),
+});
+
+export const VendorPutSchema = z.union([
+  VendorItemUpdateSchema,
+  VendorBulkUpdateSchema,
+]);
+export type VendorPutInput = z.infer<typeof VendorPutSchema>;
+
+export const TaskToggleSchema = z.object({
+  toggleId: z.string().min(1),
+});
+
+export const TaskItemUpdateSchema = z.object({
+  taskId: z.string().min(1),
+  updates: TaskItemSchema.partial(),
+});
+
+export const TaskBulkUpdateSchema = z.object({
+  items: z.array(TaskItemSchema).max(100),
+});
+
+export const TaskPutSchema = z.union([
+  TaskToggleSchema,
+  TaskItemUpdateSchema,
+  TaskBulkUpdateSchema,
+]);
+export type TaskPutInput = z.infer<typeof TaskPutSchema>;
+

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { calculateReadiness } from '@/lib/readiness';
+import { calculateReadiness, READINESS_WEIGHTS } from '@/lib/readiness';
+import { formatCurrency, getCurrencySymbol } from '@/lib/utils';
 import type {
   EventData,
   BudgetBreakdown,
@@ -135,5 +136,23 @@ describe('Event Readiness Calculator', () => {
 
     const score = calculateReadiness(baseEvent, overBudget, [], [], []);
     expect(score.recommendations.some((r: string) => r.includes('exceed your budget'))).toBe(true);
+  });
+
+  it('guarantees READINESS_WEIGHTS sum exactly to 1.0 (100%)', () => {
+    const totalWeight =
+      READINESS_WEIGHTS.budget +
+      READINESS_WEIGHTS.timeline +
+      READINESS_WEIGHTS.vendors +
+      READINESS_WEIGHTS.tasks;
+    expect(totalWeight).toBeCloseTo(1.0, 5);
+  });
+
+  it('formats currency consistently with correct international symbols', () => {
+    expect(formatCurrency(1500, 'USD')).toBe('$1,500');
+    expect(formatCurrency(2500, 'EUR')).toBe('€2,500');
+    expect(formatCurrency(3500, 'GBP')).toBe('£3,500');
+    expect(formatCurrency(50000, 'INR')).toBe('₹50,000');
+    expect(getCurrencySymbol('USD')).toBe('$');
+    expect(getCurrencySymbol('EUR')).toBe('€');
   });
 });

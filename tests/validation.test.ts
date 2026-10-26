@@ -6,6 +6,11 @@ import {
   VendorItemSchema,
   TaskItemSchema,
   CopilotMessageSchema,
+  EventUpdateSchema,
+  BudgetPutSchema,
+  TimelinePutSchema,
+  VendorPutSchema,
+  TaskPutSchema,
 } from '@/lib/validation';
 
 describe('Zod Validation Schemas', () => {
@@ -182,4 +187,53 @@ describe('Zod Validation Schemas', () => {
       expect(result.success).toBe(false);
     });
   });
+
+  describe('Mutation Schemas', () => {
+    it('validates BudgetPutSchema contingency updates and rejects out of bounds values', () => {
+      expect(BudgetPutSchema.safeParse({ contingencyPercent: 15 }).success).toBe(true);
+      expect(BudgetPutSchema.safeParse({ contingencyPercent: -5 }).success).toBe(false);
+      expect(BudgetPutSchema.safeParse({ contingencyPercent: 65 }).success).toBe(false);
+    });
+
+    it('validates BudgetPutSchema category updates and bulk categories', () => {
+      const catUpdate = { categoryId: 'b1', updates: { estimated: 4500 } };
+      expect(BudgetPutSchema.safeParse(catUpdate).success).toBe(true);
+
+      const bulk = {
+        categories: [
+          { id: 'b1', name: 'Catering', allocated: 40, estimated: 4000, actual: 0, notes: '' },
+        ],
+      };
+      expect(BudgetPutSchema.safeParse(bulk).success).toBe(true);
+    });
+
+    it('validates TimelinePutSchema single and bulk updates', () => {
+      expect(TimelinePutSchema.safeParse({ itemId: 't1', updates: { status: 'completed' } }).success).toBe(true);
+      expect(TimelinePutSchema.safeParse({
+        items: [{ id: 't1', title: 'Milestone', dueDate: '2027-01-01', status: 'pending', category: 'General', sortOrder: 0 }],
+      }).success).toBe(true);
+    });
+
+    it('validates VendorPutSchema single and bulk updates', () => {
+      expect(VendorPutSchema.safeParse({ vendorId: 'v1', updates: { status: 'booked' } }).success).toBe(true);
+      expect(VendorPutSchema.safeParse({
+        items: [{ id: 'v1', category: 'Floral', name: 'Petals', status: 'needed', estimatedCost: 1000, notes: '', contactInfo: '', isRequired: true }],
+      }).success).toBe(true);
+    });
+
+    it('validates TaskPutSchema toggle, item update, and bulk updates', () => {
+      expect(TaskPutSchema.safeParse({ toggleId: 'tk1' }).success).toBe(true);
+      expect(TaskPutSchema.safeParse({ taskId: 'tk1', updates: { completed: true } }).success).toBe(true);
+      expect(TaskPutSchema.safeParse({
+        items: [{ id: 'tk1', title: 'Task 1', description: '', completed: false, priority: 'high', dueDate: '2027-01-01', category: 'General', assignee: '' }],
+      }).success).toBe(true);
+    });
+
+    it('validates EventUpdateSchema with partial fields and status changes', () => {
+      expect(EventUpdateSchema.safeParse({ status: 'confirmed' }).success).toBe(true);
+      expect(EventUpdateSchema.safeParse({ guestCount: 150 }).success).toBe(true);
+      expect(EventUpdateSchema.safeParse({ status: 'invalid-status' }).success).toBe(false);
+    });
+  });
 });
+

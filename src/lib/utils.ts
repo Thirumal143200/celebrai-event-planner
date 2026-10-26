@@ -1,3 +1,5 @@
+import type { Currency } from './types';
+
 /**
  * Utility functions for CelebrAI
  */
@@ -19,18 +21,36 @@ export function generateClientSideId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+export const CURRENCY_SYMBOLS: Record<Currency, string> = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  INR: '₹',
+};
+
+/**
+ * Return the display symbol for a supported currency.
+ */
+export function getCurrencySymbol(currency: Currency): string {
+  return CURRENCY_SYMBOLS[currency] || '$';
+}
+
 /**
  * Format currency with international standard symbol.
  */
-export function formatCurrencyAmount(amount: number, currency: string): string {
-  const symbols: Record<string, string> = {
-    USD: '$',
-    EUR: '€',
-    GBP: '£',
-    INR: '₹',
-  };
-  return `${symbols[currency] || ''}${amount.toLocaleString('en-US', {
+export function formatCurrency(amount: number, currency: Currency | string): string {
+  const symbol = (currency in CURRENCY_SYMBOLS)
+    ? CURRENCY_SYMBOLS[currency as Currency]
+    : (CURRENCY_SYMBOLS.USD);
+
+  return `${symbol}${amount.toLocaleString('en-US', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   })}`;
 }
+
+/**
+ * Alias for backward compatibility with existing callers.
+ */
+export const formatCurrencyAmount = formatCurrency;
+

@@ -9,6 +9,8 @@ import { createEvent, getAllEvents } from '@/lib/store';
 import { parseAndValidateBody, apiSuccess, apiError } from '@/lib/api-helpers';
 import type { ApiResponse, EventData } from '@/lib/types';
 
+import { z } from 'zod';
+
 export async function GET(): Promise<NextResponse<ApiResponse<EventData[]>>> {
   try {
     const events = getAllEvents();
@@ -23,9 +25,12 @@ export async function POST(
   request: NextRequest
 ): Promise<NextResponse<ApiResponse<EventData>>> {
   try {
-    const validation = await parseAndValidateBody(request, EventFormSchema);
+    const validation = await parseAndValidateBody<z.infer<typeof EventFormSchema>, EventData>(
+      request,
+      EventFormSchema
+    );
     if (!validation.success) {
-      return validation.response as NextResponse<ApiResponse<EventData>>;
+      return validation.response;
     }
 
     const event = createEvent(validation.data);

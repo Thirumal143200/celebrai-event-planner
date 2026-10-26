@@ -12,6 +12,14 @@ import type {
   TaskItem,
   ReadinessScore,
 } from './types';
+import { getDaysUntil, formatCurrency } from './utils';
+
+export const READINESS_WEIGHTS = {
+  budget: 0.25,
+  timeline: 0.25,
+  vendors: 0.25,
+  tasks: 0.25,
+} as const;
 
 /**
  * Calculate the event readiness score.
@@ -29,12 +37,12 @@ export function calculateReadiness(
   const vendorScore = calculateVendorScore(vendors);
   const taskScore = calculateTaskScore(tasks);
 
-  // Weighted average
+  // Weighted average using configured pillar weights
   const overall = Math.round(
-    budgetScore * 0.25 +
-    timelineScore * 0.25 +
-    vendorScore * 0.25 +
-    taskScore * 0.25
+    budgetScore * READINESS_WEIGHTS.budget +
+    timelineScore * READINESS_WEIGHTS.timeline +
+    vendorScore * READINESS_WEIGHTS.vendors +
+    taskScore * READINESS_WEIGHTS.tasks
   );
 
   const recommendations = generateRecommendations(
@@ -223,9 +231,7 @@ function generateRecommendations(
   }
 
   // Days until event
-  const daysUntil = Math.ceil(
-    (new Date(event.date).getTime() - Date.now()) / (24 * 60 * 60 * 1000)
-  );
+  const daysUntil = getDaysUntil(event.date);
   if (daysUntil < 30 && daysUntil > 0 && scores.vendors < 50) {
     recs.push(`Only ${daysUntil} days until your event — prioritize vendor confirmations`);
   }
@@ -236,16 +242,7 @@ function generateRecommendations(
   return recs.slice(0, 5); // Max 5 recommendations
 }
 
-function formatCurrency(amount: number, currency: string): string {
-  const symbols: Record<string, string> = {
-    USD: '$',
-    EUR: '€',
-    GBP: '£',
-    INR: '₹',
-  };
-  return `${symbols[currency] || ''}${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-}
-
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
+

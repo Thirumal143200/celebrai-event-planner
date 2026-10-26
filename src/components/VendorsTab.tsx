@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import type { VendorItem, VendorStatus, Currency } from '@/lib/types';
-import { generateClientSideId } from '@/lib/utils';
+import { generateClientSideId, getCurrencySymbol } from '@/lib/utils';
 
 interface VendorsTabProps {
   eventId: string;
@@ -33,13 +33,7 @@ export default function VendorsTab({
   const [notes, setNotes] = useState('');
   const [isRequired, setIsRequired] = useState(true);
 
-  const currencySymbols: Record<Currency, string> = {
-    USD: '$',
-    EUR: '€',
-    GBP: '£',
-    INR: '₹',
-  };
-  const sym = currencySymbols[currency] || '$';
+  const sym = getCurrencySymbol(currency);
 
   const filteredVendors = vendors.filter((v) => {
     if (filter === 'all') return true;

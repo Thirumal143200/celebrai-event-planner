@@ -80,6 +80,51 @@ describe('API Helpers — Resilience & Validation', () => {
       const json = await result.response.json();
       expect(json.message).toContain('name');
       expect(json.message).toContain('count');
+      expect(json.code).toBe('VALIDATION_FAILED');
+    }
+  });
+
+  it('includes custom error code when provided to apiError', async () => {
+    const res = apiError('Action forbidden', 403, 'Permission denied', 'FORBIDDEN_ACTION');
+    expect(res.status).toBe(403);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.error).toBe('Action forbidden');
+    expect(json.code).toBe('FORBIDDEN_ACTION');
+  });
+
+  it('rejects oversized payloads with 413 Payload Too Large', async () => {
+    const hugeReq = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'content-length': '2000000', // > 1MB
+      },
+      body: JSON.stringify({ data: 'huge' }),
+    });
+
+    const result = await parseRequestBody(hugeReq);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.response.status).toBe(413);
+      const json = await result.response.json();
+      expect(json.code).toBe('PAYLOAD_TOO_LARGE');
+    }
+  });
+
+  it('rejects malformed JSON with 400 Malformed request', async () => {
+    const malformedReq = new NextRequest('http://localhost:3000/api/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{ not valid json :::',
+    });
+
+    const result = await parseRequestBody(malformedReq);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.response.status).toBe(400);
+      const json = await result.response.json();
+      expect(json.code).toBe('MALFORMED_JSON');
     }
   });
 });

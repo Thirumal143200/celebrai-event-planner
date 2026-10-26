@@ -30,6 +30,10 @@ import { calculateReadiness } from './readiness';
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), '.data');
 const DATA_FILE = path.join(DATA_DIR, 'celebr-store.json');
 
+export const STORE_PERSIST_DEBOUNCE_MS = 100;
+export const DEFAULT_CONTINGENCY_PERCENT = 10;
+export const MAX_COPILOT_HISTORY_LENGTH = 50;
+
 function loadFromDisk(): Partial<{
   events: [string, EventData][];
   budgets: [string, BudgetBreakdown][];
@@ -58,7 +62,7 @@ function schedulePersist(): void {
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => {
     saveToDisk();
-  }, 100);
+  }, STORE_PERSIST_DEBOUNCE_MS);
 }
 
 export function saveToDisk(): void {
@@ -165,14 +169,14 @@ export function getEventAggregate(id: string): EventAggregateData | undefined {
   if (!event) return undefined;
 
   const budget = store.budgets.get(id) || null;
-  const timeline = store.timelines.get(id) || [];
-  const vendors = store.vendors.get(id) || [];
-  const tasks = store.tasks.get(id) || [];
+  const timeline = [...(store.timelines.get(id) || [])];
+  const vendors = [...(store.vendors.get(id) || [])];
+  const tasks = [...(store.tasks.get(id) || [])];
   const readiness = calculateReadiness(event, budget || undefined, timeline, vendors, tasks);
 
   return {
-    event,
-    budget,
+    event: { ...event },
+    budget: budget ? { ...budget, categories: [...budget.categories] } : null,
     timeline,
     vendors,
     tasks,
@@ -232,17 +236,21 @@ export function deleteEvent(id: string): boolean {
 // ============================================
 
 function createDefaultBudget(event: EventData): BudgetBreakdown {
+  const contingencyAmount = Math.round(
+    event.budget * (DEFAULT_CONTINGENCY_PERCENT / 100) * 100
+  ) / 100;
+
   return {
     eventId: event.id,
     totalBudget: event.budget,
     currency: event.currency,
     categories: [],
-    contingencyPercent: 10,
+    contingencyPercent: DEFAULT_CONTINGENCY_PERCENT,
     totalAllocated: 0,
     totalEstimated: 0,
     totalActual: 0,
     remaining: event.budget,
-    contingencyAmount: Math.round(event.budget * 0.1 * 100) / 100,
+    contingencyAmount,
   };
 }
 
@@ -286,8 +294,10 @@ export function setBudgetCategories(
   const budget = store.budgets.get(eventId);
   if (!budget) return undefined;
 
-  budget.categories = categories;
-  const recomputed = recomputeBudget(budget);
+  const recomputed = recomputeBudget({
+    ...budget,
+    categories: [...categories],
+  });
   store.budgets.set(eventId, recomputed);
   schedulePersist();
   return recomputed;
@@ -301,8 +311,10 @@ export function updateContingencyPercent(
   const budget = store.budgets.get(eventId);
   if (!budget) return undefined;
 
-  budget.contingencyPercent = Math.max(0, Math.min(50, percent));
-  const recomputed = recomputeBudget(budget);
+  const recomputed = recomputeBudget({
+    ...budget,
+    contingencyPercent: Math.max(0, Math.min(50, percent)),
+  });
   store.budgets.set(eventId, recomputed);
   schedulePersist();
   return recomputed;
@@ -320,8 +332,13 @@ export function updateBudgetCategory(
   const idx = budget.categories.findIndex((c) => c.id === categoryId);
   if (idx === -1) return undefined;
 
-  budget.categories[idx] = { ...budget.categories[idx], ...updates };
-  const recomputed = recomputeBudget(budget);
+  const updatedCategories = [...budget.categories];
+  updatedCategories[idx] = { ...updatedCategories[idx], ...updates };
+
+  const recomputed = recomputeBudget({
+    ...budget,
+    categories: updatedCategories,
+  });
   store.budgets.set(eventId, recomputed);
   schedulePersist();
   return recomputed;
@@ -332,14 +349,14 @@ export function updateBudgetCategory(
 // ============================================
 
 export function getTimeline(eventId: string): TimelineItem[] {
-  return getStore().timelines.get(eventId) || [];
+  return [...(getStore().timelines.get(eventId) || [])];
 }
 
 export function setTimeline(eventId: string, items: TimelineItem[]): TimelineItem[] {
   const sorted = [...items].sort((a, b) => a.sortOrder - b.sortOrder);
   getStore().timelines.set(eventId, sorted);
   schedulePersist();
-  return sorted;
+  return [...sorted];
 }
 
 export function updateTimelineItem(
@@ -354,10 +371,11 @@ export function updateTimelineItem(
   const idx = items.findIndex((i) => i.id === itemId);
   if (idx === -1) return undefined;
 
-  items[idx] = { ...items[idx], ...updates };
-  store.timelines.set(eventId, items);
+  const updatedItems = [...items];
+  updatedItems[idx] = { ...updatedItems[idx], ...updates };
+  store.timelines.set(eventId, updatedItems);
   schedulePersist();
-  return items;
+  return [...updatedItems];
 }
 
 // ============================================
@@ -365,13 +383,14 @@ export function updateTimelineItem(
 // ============================================
 
 export function getVendors(eventId: string): VendorItem[] {
-  return getStore().vendors.get(eventId) || [];
+  return [...(getStore().vendors.get(eventId) || [])];
 }
 
 export function setVendors(eventId: string, items: VendorItem[]): VendorItem[] {
-  getStore().vendors.set(eventId, items);
+  const copied = [...items];
+  getStore().vendors.set(eventId, copied);
   schedulePersist();
-  return items;
+  return [...copied];
 }
 
 export function updateVendor(
@@ -386,10 +405,11 @@ export function updateVendor(
   const idx = items.findIndex((v) => v.id === vendorId);
   if (idx === -1) return undefined;
 
-  items[idx] = { ...items[idx], ...updates };
-  store.vendors.set(eventId, items);
+  const updatedItems = [...items];
+  updatedItems[idx] = { ...updatedItems[idx], ...updates };
+  store.vendors.set(eventId, updatedItems);
   schedulePersist();
-  return items;
+  return [...updatedItems];
 }
 
 // ============================================
@@ -397,13 +417,14 @@ export function updateVendor(
 // ============================================
 
 export function getTasks(eventId: string): TaskItem[] {
-  return getStore().tasks.get(eventId) || [];
+  return [...(getStore().tasks.get(eventId) || [])];
 }
 
 export function setTasks(eventId: string, items: TaskItem[]): TaskItem[] {
-  getStore().tasks.set(eventId, items);
+  const copied = [...items];
+  getStore().tasks.set(eventId, copied);
   schedulePersist();
-  return items;
+  return [...copied];
 }
 
 export function updateTask(
@@ -418,10 +439,11 @@ export function updateTask(
   const idx = items.findIndex((t) => t.id === taskId);
   if (idx === -1) return undefined;
 
-  items[idx] = { ...items[idx], ...updates };
-  store.tasks.set(eventId, items);
+  const updatedItems = [...items];
+  updatedItems[idx] = { ...updatedItems[idx], ...updates };
+  store.tasks.set(eventId, updatedItems);
   schedulePersist();
-  return items;
+  return [...updatedItems];
 }
 
 export function toggleTask(eventId: string, taskId: string): TaskItem[] | undefined {
@@ -432,10 +454,11 @@ export function toggleTask(eventId: string, taskId: string): TaskItem[] | undefi
   const idx = items.findIndex((t) => t.id === taskId);
   if (idx === -1) return undefined;
 
-  items[idx].completed = !items[idx].completed;
-  store.tasks.set(eventId, items);
+  const updatedItems = [...items];
+  updatedItems[idx] = { ...updatedItems[idx], completed: !updatedItems[idx].completed };
+  store.tasks.set(eventId, updatedItems);
   schedulePersist();
-  return items;
+  return [...updatedItems];
 }
 
 // ============================================
@@ -443,7 +466,7 @@ export function toggleTask(eventId: string, taskId: string): TaskItem[] | undefi
 // ============================================
 
 export function getCopilotHistory(eventId: string): AICopilotMessage[] {
-  return getStore().copilotHistory.get(eventId) || [];
+  return [...(getStore().copilotHistory.get(eventId) || [])];
 }
 
 export function addCopilotMessage(
@@ -451,15 +474,15 @@ export function addCopilotMessage(
   message: AICopilotMessage
 ): AICopilotMessage[] {
   const store = getStore();
-  const history = store.copilotHistory.get(eventId) || [];
+  const history = [...(store.copilotHistory.get(eventId) || [])];
   history.push(message);
-  // Keep last 50 messages
-  if (history.length > 50) {
-    history.splice(0, history.length - 50);
+  // Keep last N messages
+  if (history.length > MAX_COPILOT_HISTORY_LENGTH) {
+    history.splice(0, history.length - MAX_COPILOT_HISTORY_LENGTH);
   }
   store.copilotHistory.set(eventId, history);
   schedulePersist();
-  return history;
+  return [...history];
 }
 
 // ============================================

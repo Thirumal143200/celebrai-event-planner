@@ -51,7 +51,9 @@ export default function HomePage() {
 
   useEffect(() => {
     let ignore = false;
-    fetch('/api/events')
+    const controller = new AbortController();
+
+    fetch('/api/events', { signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
         if (!ignore) {
@@ -62,8 +64,10 @@ export default function HomePage() {
           }
         }
       })
-      .catch(() => {
-        if (!ignore) setError('Network error — please try again');
+      .catch((err: unknown) => {
+        if (!ignore && !(err instanceof DOMException && err.name === 'AbortError')) {
+          setError('Network error — please try again');
+        }
       })
       .finally(() => {
         if (!ignore) setLoading(false);
@@ -71,6 +75,7 @@ export default function HomePage() {
 
     return () => {
       ignore = true;
+      controller.abort();
     };
   }, []);
 
