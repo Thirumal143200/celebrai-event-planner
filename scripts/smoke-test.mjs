@@ -9,7 +9,7 @@ import { spawn } from 'child_process';
 import http from 'http';
 
 const PORT = 3099;
-const BASE_URL = `http://127.0.0.1:${PORT}`;
+const BASE_URL = `http://localhost:${PORT}`;
 
 let serverProcess = null;
 let failed = false;
@@ -28,7 +28,7 @@ async function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForServer(retries = 30) {
+async function waitForServer(retries = 60) {
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch(`${BASE_URL}/api/events`);

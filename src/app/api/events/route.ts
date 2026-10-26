@@ -6,22 +6,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { EventFormSchema } from '@/lib/validation';
 import { createEvent, getAllEvents } from '@/lib/store';
-import { parseRequestBody } from '@/lib/api-helpers';
+import { parseAndValidateBody, apiSuccess, apiError } from '@/lib/api-helpers';
 import type { ApiResponse, EventData } from '@/lib/types';
 
 export async function GET(): Promise<NextResponse<ApiResponse<EventData[]>>> {
   try {
     const events = getAllEvents();
-    return NextResponse.json({
-      success: true,
-      data: events,
-    });
+    return apiSuccess(events);
   } catch (error) {
     console.error('Error fetching events:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch events' },
-      { status: 500 }
-    );
+    return apiError('Failed to fetch events', 500);
   }
 }
 
@@ -29,36 +23,16 @@ export async function POST(
   request: NextRequest
 ): Promise<NextResponse<ApiResponse<EventData>>> {
   try {
-    const parseResult = await parseRequestBody(request);
-    if (!parseResult.success) {
-      return parseResult.response as NextResponse<ApiResponse<EventData>>;
-    }
-    const body = parseResult.data;
-
-    // Validate input
-    const result = EventFormSchema.safeParse(body);
-    if (!result.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Validation failed',
-          message: result.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; '),
-        },
-        { status: 400 }
-      );
+    const validation = await parseAndValidateBody(request, EventFormSchema);
+    if (!validation.success) {
+      return validation.response as NextResponse<ApiResponse<EventData>>;
     }
 
-    const event = createEvent(result.data);
+    const event = createEvent(validation.data);
 
-    return NextResponse.json(
-      { success: true, data: event, message: 'Event created successfully' },
-      { status: 201 }
-    );
+    return apiSuccess(event, 201, { message: 'Event created successfully' });
   } catch (error) {
     console.error('Error creating event:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to create event' },
-      { status: 500 }
-    );
+    return apiError('Failed to create event', 500);
   }
 }

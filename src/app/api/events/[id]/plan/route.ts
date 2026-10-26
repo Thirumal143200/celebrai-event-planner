@@ -3,9 +3,9 @@
  * POST: Generate an AI-powered event plan
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { IdParamSchema } from '@/lib/validation';
 import { getEvent, applyPlanNonDestructive } from '@/lib/store';
 import { getAIProvider, isAIDemoMode } from '@/lib/ai-provider';
+import { apiSuccess, apiError, validateIdParam } from '@/lib/api-helpers';
 import type { ApiResponse, AIPlanSuggestion } from '@/lib/types';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -16,20 +16,12 @@ export async function POST(
 ): Promise<NextResponse<ApiResponse<AIPlanSuggestion>>> {
   try {
     const { id } = await context.params;
-    const validation = IdParamSchema.safeParse({ id });
-    if (!validation.success) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid event ID format' },
-        { status: 400 }
-      );
-    }
+    const validation = validateIdParam(id);
+    if (!validation.valid) return validation.response;
 
     const event = getEvent(id);
     if (!event) {
-      return NextResponse.json(
-        { success: false, error: 'Event not found' },
-        { status: 404 }
-      );
+      return apiError('Event not found', 404);
     }
 
     const provider = getAIProvider();
@@ -38,9 +30,7 @@ export async function POST(
     // Apply plan non-destructively: preserves user's custom edits, completed items, and prevents duplicate tasks
     applyPlanNonDestructive(id, plan);
 
-    return NextResponse.json({
-      success: true,
-      data: plan,
+    return apiSuccess(plan, 200, {
       isDemo: isAIDemoMode(),
       message: isAIDemoMode()
         ? 'Plan generated using demo templates. Set GEMINI_API_KEY for AI-personalized plans.'
@@ -51,15 +41,12 @@ export async function POST(
 
     // Provide transparent error
     const message = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to generate plan',
-        message: message.includes('Rate limit')
-          ? message
-          : 'AI plan generation failed. Try again or use the manual planning tools.',
-      },
-      { status: 500 }
+    return apiError(
+      'Failed to generate plan',
+      500,
+      message.includes('Rate limit')
+        ? message
+        : 'AI plan generation failed. Try again or use the manual planning tools.'
     );
   }
 }

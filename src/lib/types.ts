@@ -141,6 +141,16 @@ export interface ReadinessScore {
   recommendations: string[];
 }
 
+export interface EventAggregateData {
+  event: EventData;
+  budget: BudgetBreakdown | null;
+  timeline: TimelineItem[];
+  vendors: VendorItem[];
+  tasks: TaskItem[];
+  readiness: ReadinessScore | null;
+}
+
+
 // ============================================
 // API Response Types
 // ============================================

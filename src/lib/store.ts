@@ -18,7 +18,10 @@ import type {
   TaskItem,
   AICopilotMessage,
   EventFormData,
+  EventAggregateData,
 } from './types';
+import { calculateReadiness } from './readiness';
+
 
 // ============================================
 // File-backed persistence configuration
@@ -155,6 +158,28 @@ export function createEvent(formData: EventFormData): EventData {
 export function getEvent(id: string): EventData | undefined {
   return getStore().events.get(id);
 }
+
+export function getEventAggregate(id: string): EventAggregateData | undefined {
+  const store = getStore();
+  const event = store.events.get(id);
+  if (!event) return undefined;
+
+  const budget = store.budgets.get(id) || null;
+  const timeline = store.timelines.get(id) || [];
+  const vendors = store.vendors.get(id) || [];
+  const tasks = store.tasks.get(id) || [];
+  const readiness = calculateReadiness(event, budget || undefined, timeline, vendors, tasks);
+
+  return {
+    event,
+    budget,
+    timeline,
+    vendors,
+    tasks,
+    readiness,
+  };
+}
+
 
 export function getAllEvents(): EventData[] {
   return Array.from(getStore().events.values())

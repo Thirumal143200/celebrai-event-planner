@@ -2,9 +2,9 @@
  * Readiness Score API
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { IdParamSchema } from '@/lib/validation';
 import { getEvent, getBudget, getTimeline, getVendors, getTasks } from '@/lib/store';
 import { calculateReadiness } from '@/lib/readiness';
+import { apiSuccess, apiError, validateIdParam } from '@/lib/api-helpers';
 import type { ApiResponse, ReadinessScore } from '@/lib/types';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -15,11 +15,11 @@ export async function GET(
 ): Promise<NextResponse<ApiResponse<ReadinessScore>>> {
   try {
     const { id } = await context.params;
-    const v = IdParamSchema.safeParse({ id });
-    if (!v.success) return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
+    const validation = validateIdParam(id);
+    if (!validation.valid) return validation.response;
 
     const event = getEvent(id);
-    if (!event) return NextResponse.json({ success: false, error: 'Event not found' }, { status: 404 });
+    if (!event) return apiError('Event not found', 404);
 
     const budget = getBudget(id);
     const timeline = getTimeline(id);
@@ -28,9 +28,9 @@ export async function GET(
 
     const readiness = calculateReadiness(event, budget, timeline, vendors, tasks);
 
-    return NextResponse.json({ success: true, data: readiness });
+    return apiSuccess(readiness);
   } catch (error) {
     console.error('Readiness error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to calculate readiness' }, { status: 500 });
+    return apiError('Failed to calculate readiness', 500);
   }
 }

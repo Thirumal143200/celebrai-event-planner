@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import type {
   EventData,
   BudgetBreakdown,
@@ -11,6 +12,7 @@ import type {
   TaskItem,
   ReadinessScore,
   EventStatus,
+  EventAggregateData,
 } from '@/lib/types';
 import ReadinessCard from '@/components/ReadinessCard';
 import OverviewTab from '@/components/OverviewTab';
@@ -18,7 +20,11 @@ import BudgetTab from '@/components/BudgetTab';
 import TimelineTab from '@/components/TimelineTab';
 import VendorsTab from '@/components/VendorsTab';
 import TasksTab from '@/components/TasksTab';
-import AICopilotDrawer from '@/components/AICopilotDrawer';
+
+// Dynamic import for non-critical copilot drawer to optimize initial bundle size
+const AICopilotDrawer = dynamic(() => import('@/components/AICopilotDrawer'), {
+  ssr: false,
+});
 
 type TabKey = 'overview' | 'budget' | 'timeline' | 'vendors' | 'tasks';
 
@@ -45,39 +51,24 @@ export default function EventWorkspacePage({ params }: PageProps) {
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-  // Fetch all event data
+  // High-efficiency single-roundtrip event data loader
   const loadEventData = useCallback(async () => {
     try {
-      const [eventRes, budgetRes, timeRes, venRes, taskRes, readyRes] = await Promise.all([
-        fetch(`/api/events/${id}`),
-        fetch(`/api/events/${id}/budget`),
-        fetch(`/api/events/${id}/timeline`),
-        fetch(`/api/events/${id}/vendors`),
-        fetch(`/api/events/${id}/tasks`),
-        fetch(`/api/events/${id}/readiness`),
-      ]);
+      const res = await fetch(`/api/events/${id}?aggregate=true`);
+      const data = await res.json();
 
-      const [eData, bData, tData, vData, tkData, rData] = await Promise.all([
-        eventRes.json(),
-        budgetRes.json(),
-        timeRes.json(),
-        venRes.json(),
-        taskRes.json(),
-        readyRes.json(),
-      ]);
-
-      if (eData.success && eData.data) {
-        setEvent(eData.data);
+      if (data.success && data.data) {
+        const agg = data.data as EventAggregateData;
+        setEvent(agg.event);
+        setBudget(agg.budget);
+        setTimeline(agg.timeline || []);
+        setVendors(agg.vendors || []);
+        setTasks(agg.tasks || []);
+        setReadiness(agg.readiness);
       } else {
         router.push('/');
         return;
       }
-
-      if (bData.success) setBudget(bData.data || null);
-      if (tData.success) setTimeline(tData.data || []);
-      if (vData.success) setVendors(vData.data || []);
-      if (tkData.success) setTasks(tkData.data || []);
-      if (rData.success) setReadiness(rData.data || null);
     } catch {
       setAlert({ type: 'error', text: 'Failed to load event data. Please refresh.' });
     } finally {
@@ -89,38 +80,22 @@ export default function EventWorkspacePage({ params }: PageProps) {
     let ignore = false;
     async function load() {
       try {
-        const [eventRes, budgetRes, timeRes, venRes, taskRes, readyRes] = await Promise.all([
-          fetch(`/api/events/${id}`),
-          fetch(`/api/events/${id}/budget`),
-          fetch(`/api/events/${id}/timeline`),
-          fetch(`/api/events/${id}/vendors`),
-          fetch(`/api/events/${id}/tasks`),
-          fetch(`/api/events/${id}/readiness`),
-        ]);
-
-        const [eData, bData, tData, vData, tkData, rData] = await Promise.all([
-          eventRes.json(),
-          budgetRes.json(),
-          timeRes.json(),
-          venRes.json(),
-          taskRes.json(),
-          readyRes.json(),
-        ]);
-
+        const res = await fetch(`/api/events/${id}?aggregate=true`);
+        const data = await res.json();
         if (ignore) return;
 
-        if (eData.success && eData.data) {
-          setEvent(eData.data);
+        if (data.success && data.data) {
+          const agg = data.data as EventAggregateData;
+          setEvent(agg.event);
+          setBudget(agg.budget);
+          setTimeline(agg.timeline || []);
+          setVendors(agg.vendors || []);
+          setTasks(agg.tasks || []);
+          setReadiness(agg.readiness);
         } else {
           router.push('/');
           return;
         }
-
-        if (bData.success) setBudget(bData.data || null);
-        if (tData.success) setTimeline(tData.data || []);
-        if (vData.success) setVendors(vData.data || []);
-        if (tkData.success) setTasks(tkData.data || []);
-        if (rData.success) setReadiness(rData.data || null);
       } catch {
         if (!ignore) {
           setAlert({ type: 'error', text: 'Failed to load event data. Please refresh.' });
@@ -276,7 +251,7 @@ export default function EventWorkspacePage({ params }: PageProps) {
               className="btn btn-primary btn-sm text-xs hidden md:inline-flex"
               id="generate-plan-header-btn"
             >
-              {planLoading ? <span className="animate-spin">✨</span> : '✨'}
+              {planLoading ? <span className="animate-spin" aria-hidden="true">✨</span> : <span aria-hidden="true">✨</span>}
               {planLoading ? 'Generating...' : 'Regenerate AI Plan'}
             </button>
 
@@ -285,6 +260,8 @@ export default function EventWorkspacePage({ params }: PageProps) {
               onClick={() => setIsCopilotOpen(true)}
               className="btn btn-secondary btn-sm text-xs bg-[var(--color-primary-50)] text-[var(--color-primary-700)] border-[var(--color-primary-200)] hover:bg-[var(--color-primary-100)]"
               id="open-copilot-header-btn"
+              aria-haspopup="dialog"
+              aria-expanded={isCopilotOpen}
             >
               🤖 Copilot
             </button>
@@ -312,23 +289,33 @@ export default function EventWorkspacePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Tab Navigation Bar */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto no-scrollbar">
+        {/* Tab Navigation Bar with full WCAG 2.2 AA Tablist semantics */}
+        <div
+          className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto no-scrollbar"
+          role="tablist"
+          aria-label="Event management tabs"
+        >
           {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               id={`tab-btn-${tab.key}`}
+              role="tab"
+              aria-selected={activeTab === tab.key}
+              aria-controls={`tabpanel-${tab.key}`}
               className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 whitespace-nowrap transition-all ${
                 activeTab === tab.key
                   ? 'border-[var(--color-primary-600)] text-[var(--color-primary-700)] bg-[var(--color-primary-50)]/50'
                   : 'border-transparent text-[var(--color-surface-600)] hover:text-[var(--color-surface-900)] hover:border-[var(--color-surface-300)]'
               }`}
             >
-              <span>{tab.icon}</span>
+              <span aria-hidden="true">{tab.icon}</span>
               <span>{tab.label}</span>
               {typeof tab.count === 'number' && tab.count > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 bg-[var(--color-surface-200)] text-[var(--color-surface-700)] rounded-full font-bold">
+                <span
+                  className="text-[10px] px-1.5 py-0.2 bg-[var(--color-surface-200)] text-[var(--color-surface-700)] rounded-full font-bold"
+                  aria-label={`${tab.count} items`}
+                >
                   {tab.count}
                 </span>
               )}
@@ -342,6 +329,8 @@ export default function EventWorkspacePage({ params }: PageProps) {
         {/* Floating Notification */}
         {alert && (
           <div
+            role="status"
+            aria-live="polite"
             className={`alert ${
               alert.type === 'success'
                 ? 'alert-success'
@@ -354,6 +343,7 @@ export default function EventWorkspacePage({ params }: PageProps) {
             <button
               onClick={() => setAlert(null)}
               className="text-xs font-bold p-1 hover:opacity-75"
+              aria-label="Dismiss notification"
             >
               ✕
             </button>
@@ -363,74 +353,82 @@ export default function EventWorkspacePage({ params }: PageProps) {
         {/* Persistent Readiness Score Gauge */}
         <ReadinessCard readiness={readiness} loading={loading} />
 
-        {/* Tab Contents */}
-        {activeTab === 'overview' && (
-          <OverviewTab
-            event={event}
-            budget={budget}
-            timeline={timeline}
-            vendors={vendors}
-            tasks={tasks}
-            currency={event.currency}
-            onNavigateTab={(tab) => {
-              if (tab === 'copilot') {
-                setIsCopilotOpen(true);
-              } else {
-                setActiveTab(tab);
-              }
-            }}
-            onGeneratePlan={handleGeneratePlan}
-            planLoading={planLoading}
-          />
-        )}
+        {/* Tab Panel Content Container */}
+        <div
+          id={`tabpanel-${activeTab}`}
+          role="tabpanel"
+          aria-labelledby={`tab-btn-${activeTab}`}
+          tabIndex={0}
+          className="focus:outline-hidden"
+        >
+          {activeTab === 'overview' && (
+            <OverviewTab
+              event={event}
+              budget={budget}
+              timeline={timeline}
+              vendors={vendors}
+              tasks={tasks}
+              currency={event.currency}
+              onNavigateTab={(tab) => {
+                if (tab === 'copilot') {
+                  setIsCopilotOpen(true);
+                } else {
+                  setActiveTab(tab);
+                }
+              }}
+              onGeneratePlan={handleGeneratePlan}
+              planLoading={planLoading}
+            />
+          )}
 
-        {activeTab === 'budget' && (
-          <BudgetTab
-            eventId={id}
-            budget={budget}
-            currency={event.currency}
-            onUpdate={(updated) => {
-              setBudget(updated);
-              refreshReadiness();
-            }}
-          />
-        )}
+          {activeTab === 'budget' && (
+            <BudgetTab
+              eventId={id}
+              budget={budget}
+              currency={event.currency}
+              onUpdate={(updated) => {
+                setBudget(updated);
+                refreshReadiness();
+              }}
+            />
+          )}
 
-        {activeTab === 'timeline' && (
-          <TimelineTab
-            eventId={id}
-            timeline={timeline}
-            eventDate={event.date}
-            onUpdate={(updated) => {
-              setTimeline(updated);
-              refreshReadiness();
-            }}
-          />
-        )}
+          {activeTab === 'timeline' && (
+            <TimelineTab
+              eventId={id}
+              timeline={timeline}
+              eventDate={event.date}
+              onUpdate={(updated) => {
+                setTimeline(updated);
+                refreshReadiness();
+              }}
+            />
+          )}
 
-        {activeTab === 'vendors' && (
-          <VendorsTab
-            eventId={id}
-            vendors={vendors}
-            currency={event.currency}
-            onUpdate={(updated) => {
-              setVendors(updated);
-              refreshReadiness();
-            }}
-          />
-        )}
+          {activeTab === 'vendors' && (
+            <VendorsTab
+              eventId={id}
+              vendors={vendors}
+              currency={event.currency}
+              onUpdate={(updated) => {
+                setVendors(updated);
+                refreshReadiness();
+              }}
+            />
+          )}
 
-        {activeTab === 'tasks' && (
-          <TasksTab
-            eventId={id}
-            tasks={tasks}
-            eventDate={event.date}
-            onUpdate={(updated) => {
-              setTasks(updated);
-              refreshReadiness();
-            }}
-          />
-        )}
+          {activeTab === 'tasks' && (
+            <TasksTab
+              eventId={id}
+              tasks={tasks}
+              eventDate={event.date}
+              onUpdate={(updated) => {
+                setTasks(updated);
+                refreshReadiness();
+              }}
+            />
+          )}
+        </div>
       </main>
 
       {/* Slide-in AI Copilot Assistant */}

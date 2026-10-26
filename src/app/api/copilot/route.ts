@@ -3,75 +3,63 @@
  * POST: Send a message to the event copilot
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { CopilotMessageSchema, IdParamSchema } from '@/lib/validation';
+import { CopilotMessageSchema } from '@/lib/validation';
 import { getEvent, getCopilotHistory, addCopilotMessage } from '@/lib/store';
-import { getAIProvider, isAIDemoMode } from '@/lib/ai-provider';
-import { parseRequestBody } from '@/lib/api-helpers';
+import { getAIProvider, isAIDemoMode, GeminiProvider } from '@/lib/ai-provider';
+import { parseAndValidateBody, apiSuccess, apiError, validateIdParam } from '@/lib/api-helpers';
 import { randomUUID } from 'crypto';
 import type { ApiResponse, AICopilotMessage } from '@/lib/types';
 
+interface CopilotMetadataResponse {
+  isFallback?: boolean;
+  modelUsed?: string;
+  fallbackNotice?: string;
+  providerName?: string;
+  configuredModel?: string;
+}
+
 export async function GET(
   request: NextRequest
-): Promise<NextResponse<ApiResponse<AICopilotMessage[]>>> {
+): Promise<NextResponse<ApiResponse<AICopilotMessage[]> & CopilotMetadataResponse>> {
   try {
     const { searchParams } = new URL(request.url);
     const eventId = searchParams.get('eventId');
     if (!eventId) {
-      return NextResponse.json(
-        { success: false, error: 'eventId query parameter is required' },
-        { status: 400 }
-      );
+      return apiError('eventId query parameter is required', 400);
     }
-    const validation = IdParamSchema.safeParse({ id: eventId });
-    if (!validation.success) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid event ID' },
-        { status: 400 }
-      );
+    const validation = validateIdParam(eventId);
+    if (!validation.valid) {
+      return validation.response;
     }
     const history = getCopilotHistory(eventId);
     const provider = getAIProvider();
+
     return NextResponse.json({
       success: true,
       data: history,
       isDemo: isAIDemoMode(),
       providerName: provider.name,
       configuredModel: process.env.GEMINI_MODEL || 'gemini-3-flash-preview',
-    } as any);
+    });
   } catch (error) {
     console.error('[CelebrAI Copilot GET] error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to retrieve copilot history' },
-      { status: 500 }
-    );
+    return apiError('Failed to retrieve copilot history', 500);
   }
 }
 
 export async function POST(
   request: NextRequest
-): Promise<NextResponse<ApiResponse<AICopilotMessage>>> {
+): Promise<NextResponse<ApiResponse<AICopilotMessage> & CopilotMetadataResponse>> {
   try {
-    const parseResult = await parseRequestBody(request);
-    if (!parseResult.success) {
-      return parseResult.response as NextResponse<ApiResponse<AICopilotMessage>>;
-    }
-    const body = parseResult.data;
-
-    const validation = CopilotMessageSchema.safeParse(body);
+    const validation = await parseAndValidateBody(request, CopilotMessageSchema);
     if (!validation.success) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid request', message: validation.error.message },
-        { status: 400 }
-      );
+      return validation.response as NextResponse<ApiResponse<AICopilotMessage>>;
     }
 
     const { message, eventId } = validation.data;
     const event = getEvent(eventId);
     if (!event) {
-      return NextResponse.json(
-        { success: false, error: 'Event not found' },
-        { status: 404 }
-      );
+      return apiError('Event not found', 404);
     }
 
     // Store user message
@@ -92,7 +80,8 @@ export async function POST(
     }));
 
     const response = await provider.chat(event, message, history);
-    const meta = (provider as any).lastCallMetadata || { isFallback: false };
+    const lastMetadata = provider instanceof GeminiProvider ? provider.lastCallMetadata : undefined;
+    const isFallback = lastMetadata ? lastMetadata.isFallback : isAIDemoMode();
 
     // Store assistant message
     const assistantMsg: AICopilotMessage = {
@@ -100,7 +89,7 @@ export async function POST(
       role: 'assistant',
       content: response,
       timestamp: new Date().toISOString(),
-      isAIGenerated: !meta.isFallback,
+      isAIGenerated: !isFallback,
     };
     addCopilotMessage(eventId, assistantMsg);
 
@@ -108,10 +97,10 @@ export async function POST(
       success: true,
       data: assistantMsg,
       isDemo: isAIDemoMode(),
-      isFallback: meta.isFallback || false,
-      modelUsed: meta.modelUsed || (process.env.GEMINI_MODEL || 'gemini-3-flash-preview'),
-      fallbackNotice: meta.notice,
-    } as any);
+      isFallback,
+      modelUsed: lastMetadata?.modelUsed || (process.env.GEMINI_MODEL || 'gemini-3-flash-preview'),
+      fallbackNotice: lastMetadata?.notice,
+    });
   } catch (error) {
     const rawError = error instanceof Error ? error.message : String(error);
     const safeError = rawError.replace(/key=[^&\s]+/gi, 'key=[REDACTED]');
@@ -126,10 +115,6 @@ export async function POST(
       safeMessage = 'The request took longer than expected. Please try again with a shorter prompt.';
     }
 
-    return NextResponse.json(
-      { success: false, error: safeMessage, message: safeMessage },
-      { status: 500 }
-    );
+    return apiError(safeMessage, 500, safeMessage);
   }
 }
-

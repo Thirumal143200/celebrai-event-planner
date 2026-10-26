@@ -2,13 +2,19 @@
  * Vendors API
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { IdParamSchema, VendorItemSchema } from '@/lib/validation';
+import { VendorItemSchema } from '@/lib/validation';
 import { z } from 'zod';
 import { getEvent, getVendors, setVendors, updateVendor } from '@/lib/store';
-import { parseRequestBody } from '@/lib/api-helpers';
+import { parseRequestBody, apiSuccess, apiError, validateIdParam } from '@/lib/api-helpers';
 import type { ApiResponse, VendorItem } from '@/lib/types';
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+interface VendorsPutBody {
+  vendorId?: string;
+  updates?: Record<string, unknown>;
+  items?: unknown[];
+}
 
 export async function GET(
   _request: NextRequest,
@@ -16,14 +22,14 @@ export async function GET(
 ): Promise<NextResponse<ApiResponse<VendorItem[]>>> {
   try {
     const { id } = await context.params;
-    const v = IdParamSchema.safeParse({ id });
-    if (!v.success) return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
-    if (!getEvent(id)) return NextResponse.json({ success: false, error: 'Event not found' }, { status: 404 });
+    const validation = validateIdParam(id);
+    if (!validation.valid) return validation.response;
+    if (!getEvent(id)) return apiError('Event not found', 404);
 
-    return NextResponse.json({ success: true, data: getVendors(id) });
+    return apiSuccess(getVendors(id));
   } catch (error) {
     console.error('Vendors GET error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to fetch vendors' }, { status: 500 });
+    return apiError('Failed to fetch vendors', 500);
   }
 }
 
@@ -33,11 +39,11 @@ export async function PUT(
 ): Promise<NextResponse<ApiResponse<VendorItem[]>>> {
   try {
     const { id } = await context.params;
-    const v = IdParamSchema.safeParse({ id });
-    if (!v.success) return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
-    if (!getEvent(id)) return NextResponse.json({ success: false, error: 'Event not found' }, { status: 404 });
+    const validation = validateIdParam(id);
+    if (!validation.valid) return validation.response;
+    if (!getEvent(id)) return apiError('Event not found', 404);
 
-    const parseResult = await parseRequestBody(request);
+    const parseResult = await parseRequestBody<VendorsPutBody>(request);
     if (!parseResult.success) {
       return parseResult.response as NextResponse<ApiResponse<VendorItem[]>>;
     }
@@ -46,27 +52,24 @@ export async function PUT(
     if (body.vendorId && body.updates) {
       const updateResult = VendorItemSchema.partial().safeParse(body.updates);
       if (!updateResult.success) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid vendor updates', message: updateResult.error.message },
-          { status: 400 }
-        );
+        return apiError('Invalid vendor updates', 400, updateResult.error.message);
       }
       const updated = updateVendor(id, body.vendorId, updateResult.data);
-      if (!updated) return NextResponse.json({ success: false, error: 'Vendor not found' }, { status: 404 });
-      return NextResponse.json({ success: true, data: updated });
+      if (!updated) return apiError('Vendor not found', 404);
+      return apiSuccess(updated);
     }
 
     if (body.items) {
       const result = z.array(VendorItemSchema).safeParse(body.items);
       if (!result.success) {
-        return NextResponse.json({ success: false, error: 'Invalid data', message: result.error.message }, { status: 400 });
+        return apiError('Invalid data', 400, result.error.message);
       }
-      return NextResponse.json({ success: true, data: setVendors(id, result.data) });
+      return apiSuccess(setVendors(id, result.data));
     }
 
-    return NextResponse.json({ success: false, error: 'Invalid request' }, { status: 400 });
+    return apiError('Invalid request', 400);
   } catch (error) {
     console.error('Vendors PUT error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to update vendors' }, { status: 500 });
+    return apiError('Failed to update vendors', 500);
   }
 }

@@ -11,7 +11,7 @@ interface ReadinessCardProps {
 export default function ReadinessCard({ readiness, loading }: ReadinessCardProps) {
   if (loading || !readiness) {
     return (
-      <div className="glass-card p-6 animate-pulse">
+      <div className="glass-card p-6 animate-pulse" role="status" aria-label="Loading readiness score">
         <div className="h-6 bg-[var(--color-surface-200)] rounded w-1/3 mb-4"></div>
         <div className="h-4 bg-[var(--color-surface-200)] rounded w-full mb-2"></div>
         <div className="h-4 bg-[var(--color-surface-200)] rounded w-2/3"></div>
@@ -31,11 +31,22 @@ export default function ReadinessCard({ readiness, loading }: ReadinessCardProps
   const status = getScoreColor(overall);
 
   return (
-    <div className="glass-card p-6 relative overflow-hidden" id="readiness-score-card">
+    <section
+      className="glass-card p-6 relative overflow-hidden"
+      id="readiness-score-card"
+      aria-label="Event readiness assessment"
+    >
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-[var(--color-surface-100)]">
         <div className="flex items-center gap-5">
-          <div className="relative flex items-center justify-center w-24 h-24 rounded-2xl bg-white shadow-inner border border-[var(--color-surface-200)]">
-            <svg className="w-20 h-20 transform -rotate-90" viewBox="0 0 36 36">
+          <div
+            className="relative flex items-center justify-center w-24 h-24 rounded-2xl bg-white shadow-inner border border-[var(--color-surface-200)]"
+            role="progressbar"
+            aria-valuenow={overall}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Overall readiness score: ${overall}% - ${status.label}`}
+          >
+            <svg className="w-20 h-20 transform -rotate-90" viewBox="0 0 36 36" aria-hidden="true">
               <path
                 className="text-[var(--color-surface-200)]"
                 strokeWidth="3.5"
@@ -61,7 +72,7 @@ export default function ReadinessCard({ readiness, loading }: ReadinessCardProps
           <div>
             <div className="flex items-center gap-2 mb-1">
               <h2 className="text-xl font-bold text-[var(--color-surface-900)]">Event Readiness</h2>
-              <span className={`badge ${status.badge} font-bold text-xs`}>{status.label}</span>
+              <span className={`badge ${status.badge} font-bold text-xs`} aria-live="polite">{status.label}</span>
             </div>
             <p className="text-sm text-[var(--color-surface-500)] max-w-md">
               Transparent assessment computed across your budget allocation, milestone progress, vendor confirmations, and tasks.
@@ -76,7 +87,14 @@ export default function ReadinessCard({ readiness, loading }: ReadinessCardProps
               <span className="text-xs font-semibold text-[var(--color-surface-500)]">💰 Budget</span>
               <span className="text-xs font-bold text-[var(--color-surface-800)]">{breakdown.budget}%</span>
             </div>
-            <div className="w-full bg-[var(--color-surface-100)] h-2 rounded-full overflow-hidden">
+            <div
+              className="w-full bg-[var(--color-surface-100)] h-2 rounded-full overflow-hidden"
+              role="progressbar"
+              aria-valuenow={breakdown.budget}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Budget readiness: ${breakdown.budget}%`}
+            >
               <div className="bg-[var(--color-primary-500)] h-full rounded-full transition-all duration-700" style={{ width: `${breakdown.budget}%` }}></div>
             </div>
           </div>
@@ -86,7 +104,14 @@ export default function ReadinessCard({ readiness, loading }: ReadinessCardProps
               <span className="text-xs font-semibold text-[var(--color-surface-500)]">⏱️ Timeline</span>
               <span className="text-xs font-bold text-[var(--color-surface-800)]">{breakdown.timeline}%</span>
             </div>
-            <div className="w-full bg-[var(--color-surface-100)] h-2 rounded-full overflow-hidden">
+            <div
+              className="w-full bg-[var(--color-surface-100)] h-2 rounded-full overflow-hidden"
+              role="progressbar"
+              aria-valuenow={breakdown.timeline}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Timeline readiness: ${breakdown.timeline}%`}
+            >
               <div className="bg-[var(--color-info-500)] h-full rounded-full transition-all duration-700" style={{ width: `${breakdown.timeline}%` }}></div>
             </div>
           </div>
@@ -96,7 +121,14 @@ export default function ReadinessCard({ readiness, loading }: ReadinessCardProps
               <span className="text-xs font-semibold text-[var(--color-surface-500)]">🤝 Vendors</span>
               <span className="text-xs font-bold text-[var(--color-surface-800)]">{breakdown.vendors}%</span>
             </div>
-            <div className="w-full bg-[var(--color-surface-100)] h-2 rounded-full overflow-hidden">
+            <div
+              className="w-full bg-[var(--color-surface-100)] h-2 rounded-full overflow-hidden"
+              role="progressbar"
+              aria-valuenow={breakdown.vendors}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Vendors readiness: ${breakdown.vendors}%`}
+            >
               <div className="bg-[var(--color-accent-500)] h-full rounded-full transition-all duration-700" style={{ width: `${breakdown.vendors}%` }}></div>
             </div>
           </div>
@@ -106,7 +138,14 @@ export default function ReadinessCard({ readiness, loading }: ReadinessCardProps
               <span className="text-xs font-semibold text-[var(--color-surface-500)]">✅ Tasks</span>
               <span className="text-xs font-bold text-[var(--color-surface-800)]">{breakdown.tasks}%</span>
             </div>
-            <div className="w-full bg-[var(--color-surface-100)] h-2 rounded-full overflow-hidden">
+            <div
+              className="w-full bg-[var(--color-surface-100)] h-2 rounded-full overflow-hidden"
+              role="progressbar"
+              aria-valuenow={breakdown.tasks}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Tasks readiness: ${breakdown.tasks}%`}
+            >
               <div className="bg-[var(--color-success-500)] h-full rounded-full transition-all duration-700" style={{ width: `${breakdown.tasks}%` }}></div>
             </div>
           </div>
@@ -125,13 +164,13 @@ export default function ReadinessCard({ readiness, loading }: ReadinessCardProps
                 key={i}
                 className="flex items-center gap-2 bg-[var(--color-primary-50)] text-[var(--color-primary-900)] text-xs px-3 py-1.5 rounded-lg border border-[var(--color-primary-200)] shadow-xs"
               >
-                <span className="text-xs">💡</span>
+                <span className="text-xs" aria-hidden="true">💡</span>
                 <span>{rec}</span>
               </div>
             ))}
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }

@@ -51,10 +51,9 @@ export default function HomePage() {
 
   useEffect(() => {
     let ignore = false;
-    async function load() {
-      try {
-        const res = await fetch('/api/events');
-        const data = await res.json();
+    fetch('/api/events')
+      .then((res) => res.json())
+      .then((data) => {
         if (!ignore) {
           if (data.success) {
             setEvents(data.data || []);
@@ -62,13 +61,14 @@ export default function HomePage() {
             setError(data.error || 'Failed to load events');
           }
         }
-      } catch {
+      })
+      .catch(() => {
         if (!ignore) setError('Network error — please try again');
-      } finally {
+      })
+      .finally(() => {
         if (!ignore) setLoading(false);
-      }
-    }
-    load();
+      });
+
     return () => {
       ignore = true;
     };

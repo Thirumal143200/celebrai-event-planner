@@ -193,20 +193,23 @@ Respond with ONLY valid JSON in this exact structure (no markdown, no code fence
                 responseMimeType: 'application/json',
               },
             }),
-            35000,
+            20000,
             `Gemini plan generation timed out on model ${model}`
           );
           text = res.text;
-        } else if ((this.client as any)?.interactions?.create) {
+        } else if ('interactions' in (this.client as object)) {
+          const clientWithInteractions = this.client as unknown as {
+            interactions: { create: (opts: { model: string; input: string }) => Promise<{ output_text?: string }> };
+          };
           const interaction = await withTimeout(
-            (this.client as any).interactions.create({
+            clientWithInteractions.interactions.create({
               model,
               input: `${systemInstruction}\n\n${userPrompt}`,
             }),
-            35000,
+            20000,
             `Gemini plan generation timed out on model ${model}`
           );
-          text = (interaction as any)?.output_text;
+          text = interaction.output_text;
         }
 
         if (!text) {
@@ -295,20 +298,23 @@ RULES:
                 maxOutputTokens: 800,
               },
             }),
-            35000,
+            20000,
             `Gemini copilot chat timed out on model ${model}`
           );
           text = res.text;
-        } else if ((this.client as any)?.interactions?.create) {
+        } else if ('interactions' in (this.client as object)) {
+          const clientWithInteractions = this.client as unknown as {
+            interactions: { create: (opts: { model: string; input: string }) => Promise<{ output_text?: string }> };
+          };
           const interaction = await withTimeout(
-            (this.client as any).interactions.create({
+            clientWithInteractions.interactions.create({
               model,
               input: `${systemInstruction}\n\n${fullPrompt}`,
             }),
-            35000,
+            20000,
             `Gemini copilot chat timed out on model ${model}`
           );
-          text = (interaction as any)?.output_text;
+          text = interaction.output_text;
         }
 
         if (!text) {
